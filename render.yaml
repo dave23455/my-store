@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: linastyle-web
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.linastyle.shop/api
+  - type: web
+    name: linastyle-api
+    runtime: node
+    region: frankfurt
+    plan: starter
+    rootDir: backend
+    buildCommand: npm ci
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: linastyle-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://linastyle.shop
+      - key: STORE_CURRENCY
+        value: NGN
+      - key: PAYMENT_PROVIDER
+        value: paystack
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+databases:
+  - name: linastyle-db
+    region: frankfurt
+    plan: basic-256mb
+    databaseName: linastyle
+    user: linastyle
