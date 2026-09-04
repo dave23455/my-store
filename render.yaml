@@ -26,7 +26,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        value: https://linastyle.shop
+        value: https://lunastyle.vercel.app
       - key: STORE_CURRENCY
         value: NGN
       - key: PAYMENT_PROVIDER

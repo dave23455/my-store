@@ -43,7 +43,7 @@ Vercel can host the React storefront publicly, but it does not replace the Expre
 2. Leave the project root as the repository root. The included `vercel.json` builds `frontend` and serves its `dist` folder.
 3. Add `VITE_API_URL` in Vercel with the API URL, for example `https://api.linastyle.shop/api`.
 4. Deploy. Vercel provides a public `*.vercel.app` URL that works on phones and other devices.
-5. Set the API's `CLIENT_URL` on Render to that Vercel URL, or to your custom storefront domain, then redeploy the API.
+5. Set the API's `CLIENT_URL` on Render to `https://lunastyle.vercel.app`, or to your custom storefront domain later, then redeploy the API.
 
 For a custom domain, add it in Vercel and use that domain for `CLIENT_URL`. The API must also allow every storefront origin you use. The existing Render static-site setup is an alternative that keeps the frontend and API configuration together.
 
