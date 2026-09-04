@@ -12,7 +12,7 @@ services:
     name: linastyle-api
     runtime: node
     region: frankfurt
-    plan: starter
+    plan: free
     rootDir: backend
     buildCommand: npm ci
     preDeployCommand: npm run db:migrate
