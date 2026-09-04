@@ -26,7 +26,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        value: https://lunastyle.vercel.app
+        value: https://linastyle.shop,https://www.linastyle.shop
       - key: STORE_CURRENCY
         value: NGN
       - key: PAYMENT_PROVIDER
@@ -40,6 +40,6 @@ services:
 databases:
   - name: linastyle-db
     region: frankfurt
-    plan: basic-256mb
+    plan: free
     databaseName: linastyle
     user: linastyle

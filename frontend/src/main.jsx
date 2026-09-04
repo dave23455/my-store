@@ -3,6 +3,7 @@
     [orders, setOrders] = useState([]),
     [displayName, setDisplayName] = useState(""),
     [nameMessage, setNameMessage] = useState(""),
+    [accountError, setAccountError] = useState(""),
     nav = useNavigate();
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -21,10 +22,11 @@
           nav("/login");
           return;
         }
-        setUser((await u.json()).user);
+        const userData = await u.json();
+        setUser(userData.user);
         setOrders(o.ok ? await o.json() : []);
       })
-      .catch(() => {});
+      .catch(() => setAccountError("We could not connect to your account. Please start the store API and try again."));
   }, [nav]);
   async function saveDisplayName(event) {
     event.preventDefault();
@@ -52,6 +54,16 @@
       );
     else alert(data.message || "This order cannot be cancelled.");
   }
+  if (accountError)
+    return (
+      <main className="page">
+        <h1>Account unavailable</h1>
+        <p>{accountError}</p>
+        <button className="darkbtn" onClick={() => window.location.reload()}>
+          Try again
+        </button>
+      </main>
+    );
   if (!user) return <main className="page">Loading your account...</main>;
   return (
     <main className="page account-page">
