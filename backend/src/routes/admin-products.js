@@ -15,7 +15,7 @@ const productSchema = z.object({
   stock: z.number().int().nonnegative(),
   sku: z.string().min(2),
   brand: z.string().optional(),
-  image: z.string().url().optional(),
+  image: z.string().url().refine((value) => !/^https?:\/\/(www\.)?ibb\.co\//i.test(value), 'Use the direct image URL, such as https://i.ibb.co/.../photo.jpg').optional(),
   sizes: z.array(z.object({
     name: z.string().min(1),
     stock: z.number().int().nonnegative(),

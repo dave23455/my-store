@@ -1,6 +1,8 @@
 ﻿function AccountDetails() {
   const [user, setUser] = useState(),
     [orders, setOrders] = useState([]),
+    [displayName, setDisplayName] = useState(""),
+    [nameMessage, setNameMessage] = useState(""),
     nav = useNavigate();
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -24,9 +26,31 @@
       })
       .catch(() => {});
   }, [nav]);
+  async function saveDisplayName(event) {
+    event.preventDefault();
+    const response = await fetch(API + "/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ name: displayName }) });
+    const data = await response.json();
+    if (response.ok) { setUser(data.user); setDisplayName(data.user.name); setNameMessage("Name updated successfully."); }
+    else setNameMessage(data.message || "Could not update your name.");
+  }
   function logout() {
     localStorage.removeItem("token");
     nav("/login");
+  }
+  async function cancelOrder(orderId) {
+    if (!window.confirm("Cancel this unpaid order?")) return;
+    const response = await fetch(API + "/orders/" + orderId + "/cancel", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer " + localStorage.getItem("token") },
+    });
+    const data = await response.json();
+    if (response.ok)
+      setOrders((items) =>
+        items.map((order) =>
+          order.id === orderId ? { ...order, status: "cancelled" } : order,
+        ),
+      );
+    else alert(data.message || "This order cannot be cancelled.");
   }
   if (!user) return <main className="page">Loading your account...</main>;
   return (
@@ -34,7 +58,7 @@
       <div className="account-header">
         <div>
           <p className="eyebrow">YOUR ACCOUNT</p>
-          <h1>Welcome, {user.name}.</h1>
+          <h1>Welcome, {user.name}</h1>
         </div>
         <button className="link" onClick={logout}>
           Log out
@@ -51,14 +75,31 @@
         <p>
           <b>Account type:</b> {user.role === "admin" ? "Owner" : "Customer"}
         </p>
-        {user.role === "admin" && <Link className="darkbtn" to="/admin">Open product catalog</Link>}
+        <form className="name-form" onSubmit={saveDisplayName}>
+          <label>Display name<input required minLength="2" maxLength="100" value={displayName || user.name} onChange={(event) => setDisplayName(event.target.value)} /></label>
+          <button className="darkbtn">Save name</button>
+          {nameMessage && <small>{nameMessage}</small>}
+        </form>
+        {user.role === "admin" && (
+          <Link className="darkbtn" to="/admin">
+            Open product catalog
+          </Link>
+        )}
       </section>
       <h2>Order history</h2>
       {orders.length ? (
         orders.map((o) => (
-          <p key={o.id}>
-            Order #{o.id} - {o.status} - {money(o.total)}
-          </p>
+          <div className="account-order" key={o.id}>
+            <span>
+              Order #{o.id} - {o.status} - {money(o.total)}
+            </span>
+            {o.status === "pending_payment" &&
+              o.payment_status === "pending" && (
+                <button className="link" onClick={() => cancelOrder(o.id)}>
+                  Cancel order
+                </button>
+              )}
+          </div>
         ))
       ) : (
         <p>No orders yet.</p>
@@ -72,6 +113,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -85,7 +127,9 @@ import {
   useParams,
 } from "react-router-dom";
 import "./styles.css";
-const API = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/api" : "http://localhost:4000/api");
+const API =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? "/api" : "http://localhost:4000/api");
 const defaultSettings = {
   store_name: "LinaStyledYou",
   tag_line: "Premium beauty, delivered worldwide",
@@ -110,6 +154,13 @@ const money = (n) =>
     currency: "NGN",
     maximumFractionDigits: 0,
   }).format(n);
+const compactMoney = (n) =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(n);
 const cleanWhatsApp = (v) => String(v || "").replace(/\D/g, "");
 function useCart() {
   return useContext(Cart);
@@ -130,24 +181,52 @@ function Header() {
   const { cart } = useCart();
   const settings = useStore();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const wa = cleanWhatsApp(settings.whatsapp_number);
-  useEffect(() => { const token = localStorage.getItem("token"); if (!token) { setIsAdmin(false); return; } fetch(API + "/auth/me", { headers: { Authorization: "Bearer " + token } }).then((r) => r.ok ? r.json() : null).then((data) => setIsAdmin(data?.user?.role === "admin")).catch(() => setIsAdmin(false)); }, [location.pathname]);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsAdmin(false);
+      return;
+    }
+    fetch(API + "/auth/me", { headers: { Authorization: "Bearer " + token } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setIsAdmin(data?.user?.role === "admin"))
+      .catch(() => setIsAdmin(false));
+  }, [location.pathname]);
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
   return (
     <>
       <div className="notice">
-        {settings.shipping_message || "We ship worldwide"} Â· Secure checkout Â·
+        {settings.shipping_message || "We ship worldwide"} | Secure checkout |
         Made for your glow
       </div>
       <header>
         <Link className="logo" to="/">
           <Brand />
         </Link>
-        <nav>
+        <button
+          className="menu-toggle"
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        <nav className={menuOpen ? "open" : ""}>
           <Link to="/shop">Shop</Link>
           <Link to="/contact">Contact</Link>
           <Link to="/account">Account</Link>
-          {isAdmin && <Link className="admin-link" to="/admin">Manage products</Link>}
+          {isAdmin && (
+            <Link className="admin-link" to="/admin">
+              Manage products
+            </Link>
+          )}
           <a
             className="whatsapp-link"
             href={
@@ -180,7 +259,7 @@ function ProductCard({ p }) {
         <div className="badge">{p.new_arrival ? "NEW" : "BEST SELLER"}</div>
         <h3>{p.name}</h3>
         <small>
-          â˜…â˜…â˜…â˜…â˜… <i>({p.rating || "New"})</i>
+          ***** <i>({p.rating || "New"})</i>
         </small>
         <strong>{money(p.discount_price || p.price)}</strong>
       </Link>
@@ -285,13 +364,164 @@ function Shop() {
   );
 }
 function Product() {
-  const { id } = useParams(), [p, setP] = useState(), [choice, setChoice] = useState(""), [reviews, setReviews] = useState([]), [comments, setComments] = useState([]), [question, setQuestion] = useState(""), { add } = useCart();
+  const { id } = useParams(),
+    [p, setP] = useState(),
+    [choice, setChoice] = useState(""),
+    [reviews, setReviews] = useState([]),
+    [comments, setComments] = useState([]),
+    [question, setQuestion] = useState(""),
+    [rating, setRating] = useState("5"),
+    [reviewBody, setReviewBody] = useState(""),
+    [reviewMessage, setReviewMessage] = useState(""),
+    { add } = useCart();
   const token = localStorage.getItem("token");
-  useEffect(() => { fetch(API + "/products/" + id).then((r) => r.json()).then(setP); fetch(API + "/products/" + id + "/reviews").then((r) => r.json()).then(setReviews); fetch(API + "/products/" + id + "/comments").then((r) => r.json()).then(setComments); }, [id]);
-  async function ask(e) { e.preventDefault(); if (!token) return alert("Please sign in to send a question."); const r = await fetch(API + "/products/" + id + "/comments", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ body: question }) }); if (r.ok) { setComments([...comments, await r.json()]); setQuestion(""); } }
+  useEffect(() => {
+    fetch(API + "/products/" + id)
+      .then((r) => r.json())
+      .then(setP);
+    fetch(API + "/products/" + id + "/reviews")
+      .then((r) => r.json())
+      .then(setReviews);
+    fetch(API + "/products/" + id + "/comments")
+      .then((r) => r.json())
+      .then(setComments);
+  }, [id]);
+  async function ask(e) {
+    e.preventDefault();
+    if (!token) return alert("Please sign in to send a question.");
+    const r = await fetch(API + "/products/" + id + "/comments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({ body: question }),
+    });
+    if (r.ok) {
+      setComments([...comments, await r.json()]);
+      setQuestion("");
+    }
+  }
+  async function submitReview(e) {
+    e.preventDefault();
+    if (!token) return setReviewMessage("Please sign in to leave a rating.");
+    const r = await fetch(API + "/products/" + id + "/reviews", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({ rating: Number(rating), body: reviewBody }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      setReviewMessage("Thank you for rating this product.");
+      setReviews((items) => [
+        { ...data, name: "You" },
+        ...items.filter((item) => item.name !== "You"),
+      ]);
+    } else setReviewMessage(data.message || "Could not save your rating.");
+  }
   if (!p) return <main className="page">Loading product...</main>;
-  const chosen = p.variants?.find((v) => v.id === Number(choice)); const item = { ...p, price: chosen?.price || p.price, stock: chosen?.stock ?? p.stock, variantId: chosen?.id };
-  return <><main className="product"><img src={p.images?.[0]?.url || "/lina-styled-you-logo.jpeg"} alt={p.name} /><div><p className="eyebrow">{p.category_name}</p><h1>{p.name}</h1><p className="stars">★★★★★ <span>{p.rating || "New arrival"}</span></p><h2>{money(p.discount_price || item.price)}</h2><p>{p.description}</p>{p.variants?.length > 0 && <label className="variant-label">Choose size / option<select value={choice} onChange={(e) => setChoice(e.target.value)}><option value="">Select a size</option>{p.variants.map((v) => <option key={v.id} value={v.id}>{v.name} — {Object.values(v.options).join(" / ")} ({v.stock} left)</option>)}</select></label>}<p className={item.stock ? "in" : "out"}>{item.stock ? "In stock - ready to ship" : "Out of stock"}</p><button className="darkbtn" disabled={!item.stock || (p.variants?.length && !choice)} onClick={() => add(item)}>Add</button><p className="fine">Secure payment verified by our payment provider. Worldwide delivery available.</p></div></main><section className="page feedback"><h2>Ratings & reviews</h2>{reviews.length ? reviews.map((r) => <p key={r.id}><b>{r.name || "Verified buyer"}</b> · {"★".repeat(r.rating)}<br />{r.body}</p>) : <p>No reviews yet.</p>}<h2>Questions & chat</h2>{comments.map((c) => <p key={c.id}><b>{c.name || "Customer"}</b>: {c.body}</p>)}<form className="contact" onSubmit={ask}><textarea required value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask the store a question" /><button className="darkbtn">Send question</button></form></section></>;
+  const chosen = p.variants?.find((v) => v.id === Number(choice));
+  const item = {
+    ...p,
+    price: chosen?.price || p.price,
+    stock: chosen?.stock ?? p.stock,
+    variantId: chosen?.id,
+  };
+  return (
+    <>
+      <main className="product">
+        <img
+          src={p.images?.[0]?.url || "/lina-styled-you-logo.jpeg"}
+          alt={p.name}
+        />
+        <div>
+          <p className="eyebrow">{p.category_name}</p>
+          <h1>{p.name}</h1>
+          <p className="stars">
+            ★★★★★ <span>{Number(p.rating || 0).toFixed(1)}</span>
+          </p>
+          <h2>{money(p.discount_price || item.price)}</h2>
+          <p>{p.description}</p>
+          {p.variants?.length > 0 && (
+            <label className="variant-label">
+              Choose size / option
+              <select
+                value={choice}
+                onChange={(e) => setChoice(e.target.value)}
+              >
+                <option value="">Select a size</option>
+                {p.variants.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} — {Object.values(v.options).join(" / ")} ({v.stock}{" "}
+                    left)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className={item.stock ? "in" : "out"}>
+            {item.stock ? "In stock - ready to ship" : "Out of stock"}
+          </p>
+          <button
+            className="darkbtn"
+            disabled={!item.stock || (p.variants?.length && !choice)}
+            onClick={() => add(item)}
+          >
+            Add
+          </button>
+          <p className="fine">
+            Secure payment verified by our payment provider. Worldwide delivery
+            available.
+          </p>
+        </div>
+      </main>
+      <section className="page feedback">
+        <h2>Ratings & reviews</h2>
+        {reviews.length ? (
+          reviews.map((r) => (
+            <p key={r.id}>
+              <b>{r.name || "Verified buyer"}</b> · {"★".repeat(r.rating)}
+              <br />
+              {r.body}
+            </p>
+          ))
+        ) : (
+          <p>No reviews yet.</p>
+        )}
+        <form className="review-form" onSubmit={submitReview}>
+          <h3>Rate this product</h3>
+          <select value={rating} onChange={(e) => setRating(e.target.value)}>
+            <option value="5">5 stars</option>
+            <option value="4">4 stars</option>
+            <option value="3">3 stars</option>
+            <option value="2">2 stars</option>
+            <option value="1">1 star</option>
+          </select>
+          <textarea required minLength="3" value={reviewBody} onChange={(e) => setReviewBody(e.target.value)} placeholder="Write your review" />
+          <button className="darkbtn">Submit rating</button>
+          {reviewMessage && <p>{reviewMessage}</p>}
+        </form>
+        <h2>Questions & chat</h2>
+        {comments.map((c) => (
+          <p key={c.id}>
+            <b>{c.name || "Customer"}</b>: {c.body}
+          </p>
+        ))}
+        <form className="contact" onSubmit={ask}>
+          <textarea
+            required
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Ask the store a question"
+          />
+          <button className="darkbtn">Send question</button>
+        </form>
+      </section>
+    </>
+  );
 }
 function CartPage() {
   const { cart, remove, change } = useCart(),
@@ -318,7 +548,7 @@ function CartPage() {
                   <h3>{x.name}</h3>
                   <strong>{money(x.discount_price || x.price)}</strong>
                   <p>
-                    <button onClick={() => change(x.id, -1)}>âˆ’</button>{" "}
+                    <button onClick={() => change(x.id, -1)}>-</button>{" "}
                     {x.quantity}{" "}
                     <button onClick={() => change(x.id, 1)}>+</button>
                   </p>
@@ -335,7 +565,7 @@ function CartPage() {
             </p>
             <p>Shipping calculated at checkout</p>
             <button className="darkbtn" onClick={() => nav("/checkout")}>
-              Checkout â†’
+              Checkout -&gt;
             </button>
           </aside>
         </>
@@ -348,6 +578,13 @@ function Checkout() {
   const settings = useStore();
   const [message, setMessage] = useState(""),
     [orderId, setOrderId] = useState(""),
+    [thankYou, setThankYou] = useState(false),
+    [confirmation, setConfirmation] = useState({
+      payerName: "",
+      amount: "",
+      reference: "",
+      notes: "",
+    }),
     [form, setForm] = useState({
       name: "",
       email: "",
@@ -357,7 +594,36 @@ function Checkout() {
       address: "",
       postalCode: "",
     }),
-    token = localStorage.getItem("token");
+    token = localStorage.getItem("token"),
+    nav = useNavigate(),
+    redirectTimer = useRef();
+  async function confirmPayment(event) {
+    event.preventDefault();
+    const response = await fetch(API + "/payments/confirm", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({
+        orderId: Number(orderId),
+        payerName: confirmation.payerName,
+        amount: Number(confirmation.amount),
+        reference: confirmation.reference || undefined,
+        notes: confirmation.notes || undefined,
+      }),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setThankYou(true);
+      redirectTimer.current = setTimeout(() => nav("/account"), 3000);
+    } else
+      setMessage(data.message || "Payment confirmation could not be sent.");
+  }
+  function stayOnCheckout() {
+    clearTimeout(redirectTimer.current);
+    setThankYou(false);
+  }
   async function submit(e) {
     e.preventDefault();
     if (!token) return setMessage("Please sign in before placing your order.");
@@ -368,17 +634,33 @@ function Checkout() {
         Authorization: "Bearer " + token,
       },
       body: JSON.stringify({
-        items: cart.map((x) => ({ productId: x.id, quantity: x.quantity })),
+        items: cart.map((x) => ({
+          productId: x.id,
+          variantId: x.variantId || null,
+          quantity: x.quantity,
+        })),
         shippingAddress: form,
       }),
     });
     const d = await r.json();
     if (r.ok) {
       setOrderId(d.id);
-      const payment = await fetch(API + "/payments/initialize", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ orderId: d.id }) });
+      const payment = await fetch(API + "/payments/initialize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ orderId: d.id }),
+      });
       const details = await payment.json();
-      if (payment.ok && details.authorizationUrl) { window.location.assign(details.authorizationUrl); return; }
-      setMessage("Your order was received. Online payment is not available yet; use the bank-transfer details below.");
+      if (payment.ok && details.authorizationUrl) {
+        window.location.assign(details.authorizationUrl);
+        return;
+      }
+      setMessage(
+        "Your order was received. Online payment is not available yet; use the bank-transfer details below.",
+      );
     } else setMessage(d.message);
   }
   return (
@@ -400,6 +682,15 @@ function Checkout() {
         </button>
       </form>
       {message && <p>{message}</p>}
+      {thankYou && (
+        <div className="payment-thankyou">
+          <strong>Thank you for shopping with us</strong>
+          <span>Your payment confirmation was received.</span>
+          <button className="link" type="button" onClick={stayOnCheckout}>
+            Stay here
+          </button>
+        </div>
+      )}
       {orderId && (
         <section className="payment-card">
           <p className="eyebrow">BANK TRANSFER</p>
@@ -417,6 +708,46 @@ function Checkout() {
           <p>
             <b>Account name:</b> {settings.bank_account_name}
           </p>
+          <form className="payment-confirmation" onSubmit={confirmPayment}>
+            <h3>Have you paid?</h3>
+            <p>
+              Send your transfer details for review. Your order will be marked
+              paid after we confirm the transfer.
+            </p>
+            <input
+              required
+              placeholder="Name used for the transfer"
+              value={confirmation.payerName}
+              onChange={(e) =>
+                setConfirmation({ ...confirmation, payerName: e.target.value })
+              }
+            />
+            <input
+              required
+              type="number"
+              min="1"
+              placeholder="Amount paid"
+              value={confirmation.amount}
+              onChange={(e) =>
+                setConfirmation({ ...confirmation, amount: e.target.value })
+              }
+            />
+            <input
+              placeholder="Bank reference (optional)"
+              value={confirmation.reference}
+              onChange={(e) =>
+                setConfirmation({ ...confirmation, reference: e.target.value })
+              }
+            />
+            <textarea
+              placeholder="Note (optional)"
+              value={confirmation.notes}
+              onChange={(e) =>
+                setConfirmation({ ...confirmation, notes: e.target.value })
+              }
+            />
+            <button className="darkbtn">Confirm payment</button>
+          </form>
         </section>
       )}{" "}
       {!token && <Link to="/login">Sign in or create an account -&gt;</Link>}
@@ -424,7 +755,8 @@ function Checkout() {
   );
 }
 function Login() {
-  const [email, setEmail] = useState(""),
+  const [name, setName] = useState(""),
+    [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [register, setRegister] = useState(false),
     [msg, setMsg] = useState(""),
@@ -436,7 +768,7 @@ function Login() {
     const r = await fetch(API + "/auth/" + (register ? "register" : "login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name: "Glow customer" }),
+      body: JSON.stringify({ email, password, ...(register ? { name } : {}) }),
     });
     const d = await r.json();
     if (!r.ok) return setMsg(d.message);
@@ -447,12 +779,29 @@ function Login() {
   return (
     <main className="page auth">
       <div className="auth-brand">
-        <img src={settings.logo_url || "/lina-styled-you-logo.jpeg"} alt="LinaStyledYou" />
+        <img
+          src={settings.logo_url || "/lina-styled-you-logo.jpeg"}
+          alt="LinaStyledYou"
+        />
         <Brand />
       </div>
-      <h1>{register ? "Create your account" : "Welcome back"}</h1>
-      <p>{register ? "Create a customer account to track orders, review purchases, and check out faster." : "Your account permissions are determined securely by your email and password."}</p>
+      <h1>{register ? "Welcome" : "Welcome back"}</h1>
+      <p>
+        {register
+          ? "Create a customer account to track orders, review purchases, and check out faster."
+          : "Your account permissions are determined securely by your email and password."}
+      </p>
       <form onSubmit={submit}>
+        {register && (
+          <input
+            required
+            minLength="2"
+            maxLength="100"
+            placeholder="Name to display on your account"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        )}
         <input
           type="email"
           required
@@ -473,30 +822,122 @@ function Login() {
         </button>
       </form>
       {msg && <p>{msg}</p>}
-      {accountType && <p>Signed in as {accountType === "admin" ? "admin" : "customer"}.</p>}
+      {accountType && (
+        <p>Signed in as {accountType === "admin" ? "admin" : "customer"}.</p>
+      )}
+      {!register && (
+        <Link className="link" to="/forgot-password">
+          Forgot your password?
+        </Link>
+      )}
       <button className="link" onClick={() => setRegister(!register)}>
-        {register
-          ? "Already have an account? Sign in"
-          : "CREATE NEW ACCOUNT"}
+        {register ? "Already have an account? Sign in" : "CREATE NEW ACCOUNT"}
       </button>
-      {!register && <Link className="link" to="/forgot-password">Forgot your password?</Link>}
     </main>
   );
 }
 function ForgotPassword() {
-  const [email, setEmail] = useState(""), [message, setMessage] = useState("");
-  async function submit(e) { e.preventDefault(); const r = await fetch(API + "/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }); const d = await r.json(); setMessage(d.message); }
-  return <main className="page auth"><h1>Reset your password</h1><p>Enter your email and we will send a secure reset link.</p><form onSubmit={submit}><input required type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} /><button className="darkbtn">Send reset link</button></form>{message && <p>{message}</p>}<Link to="/login">Back to sign in</Link></main>;
+  const [email, setEmail] = useState(""),
+    [message, setMessage] = useState("");
+  async function submit(e) {
+    e.preventDefault();
+    const r = await fetch(API + "/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const d = await r.json();
+    setMessage(d.message);
+  }
+  return (
+    <main className="page auth">
+      <h1>Reset your password</h1>
+      <p>Enter your email and we will send a secure reset link.</p>
+      <form onSubmit={submit}>
+        <input
+          required
+          type="email"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button className="darkbtn">Send reset link</button>
+      </form>
+      {message && <p>{message}</p>}
+      <Link to="/login">Back to sign in</Link>
+    </main>
+  );
 }
 function ResetPassword() {
-  const [password, setPassword] = useState(""), [message, setMessage] = useState(""), nav = useNavigate();
-  async function submit(e) { e.preventDefault(); const token = new URLSearchParams(window.location.search).get("token"); if (!token) return setMessage("This reset link is invalid."); const r = await fetch(API + "/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) }); const d = await r.json(); setMessage(d.message); if (r.ok) setTimeout(() => nav("/login"), 1500); }
-  return <main className="page auth"><h1>Choose a new password</h1><form onSubmit={submit}><input required minLength="8" type="password" placeholder="New password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} /><button className="darkbtn">Update password</button></form>{message && <p>{message}</p>}</main>;
+  const [password, setPassword] = useState(""),
+    [message, setMessage] = useState(""),
+    nav = useNavigate();
+  async function submit(e) {
+    e.preventDefault();
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token) return setMessage("This reset link is invalid.");
+    const r = await fetch(API + "/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    const d = await r.json();
+    setMessage(d.message);
+    if (r.ok) setTimeout(() => nav("/login"), 1500);
+  }
+  return (
+    <main className="page auth">
+      <h1>Choose a new password</h1>
+      <form onSubmit={submit}>
+        <input
+          required
+          minLength="8"
+          type="password"
+          placeholder="New password (8+ characters)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button className="darkbtn">Update password</button>
+      </form>
+      {message && <p>{message}</p>}
+    </main>
+  );
 }
 function PaymentCallback() {
   const [message, setMessage] = useState("Verifying your payment securely...");
-  useEffect(() => { const reference = new URLSearchParams(window.location.search).get("reference"); const token = localStorage.getItem("token"); if (!reference || !token) return setMessage("We could not verify this payment. Please sign in and check your orders."); fetch(API + "/payments/" + encodeURIComponent(reference) + "/verify", { headers: { Authorization: "Bearer " + token } }).then(async (r) => { const d = await r.json(); setMessage(r.ok && d.paid ? `Payment confirmed. Your order #${d.orderId} is now paid.` : "Payment is still pending. Please check your order again shortly."); }).catch(() => setMessage("We could not verify this payment right now. Please check your orders shortly.")); }, []);
-  return <main className="page auth"><h1>Payment status</h1><p>{message}</p><Link to="/account">View my orders</Link></main>;
+  useEffect(() => {
+    const reference = new URLSearchParams(window.location.search).get(
+      "reference",
+    );
+    const token = localStorage.getItem("token");
+    if (!reference || !token)
+      return setMessage(
+        "We could not verify this payment. Please sign in and check your orders.",
+      );
+    fetch(API + "/payments/" + encodeURIComponent(reference) + "/verify", {
+      headers: { Authorization: "Bearer " + token },
+    })
+      .then(async (r) => {
+        const d = await r.json();
+        setMessage(
+          r.ok && d.paid
+            ? `Payment confirmed. Your order #${d.orderId} is now paid.`
+            : "Payment is still pending. Please check your order again shortly.",
+        );
+      })
+      .catch(() =>
+        setMessage(
+          "We could not verify this payment right now. Please check your orders shortly.",
+        ),
+      );
+  }, []);
+  return (
+    <main className="page auth">
+      <h1>Payment status</h1>
+      <p>{message}</p>
+      <Link to="/account">View my orders</Link>
+    </main>
+  );
 }
 function LegacyAccount() {
   const [orders, setOrders] = useState([]);
@@ -514,13 +955,13 @@ function LegacyAccount() {
       {orders.length ? (
         orders.map((o) => (
           <p key={o.id}>
-            Order #{o.id} Â· {o.status} Â· {money(o.total)}
+            Order #{o.id} | {o.status} | {money(o.total)}
           </p>
         ))
       ) : (
         <p>No orders yet.</p>
       )}
-      <Link to="/shop">Continue shopping â†’</Link>
+      <Link to="/shop">Continue shopping -&gt;</Link>
     </main>
   );
 }
@@ -542,6 +983,11 @@ function Contact() {
         ? "Thank you. Your message has been sent successfully."
         : (await r.json()).message,
     );
+    if (r.ok) {
+      setName("");
+      setEmail("");
+      setBody("");
+    }
   }
   return (
     <main className="page contact-page">
@@ -594,25 +1040,280 @@ function Contact() {
 function ProductManager({ headers, products, setProducts }) {
   const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
-  const empty = { name: "", categoryId: "", description: "", price: "", discountPrice: "", stock: "", sku: "", brand: "", image: "", sizes: "" };
+  const empty = {
+    name: "",
+    categoryId: "",
+    description: "",
+    price: "",
+    discountPrice: "",
+    stock: "",
+    sku: "",
+    brand: "",
+    image: "",
+    sizes: "",
+  };
   const [form, setForm] = useState(empty);
-  useEffect(() => { fetch(API + "/categories").then((r) => r.json()).then(setCategories).catch(() => {}); }, []);
-  function change(event) { setForm({ ...form, [event.target.name]: event.target.value }); }
-  async function uploadImage(event) { const file = event.target.files?.[0]; const cloud = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME, preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET; if (!file) return; if (!cloud || !preset) return alert("Image upload is not configured on this deployed site. Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET, then redeploy."); try { const data = new FormData(); data.append("file", file); data.append("upload_preset", preset); const response = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/upload`, { method: "POST", body: data }); const result = await response.json(); if (!response.ok) return alert(result.error?.message || "Image upload failed"); setForm({ ...form, image: result.secure_url }); } catch { alert("Image upload failed. Check your connection and Cloudinary upload preset."); } }
+  useEffect(() => {
+    fetch(API + "/categories")
+      .then((r) => r.json())
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
+  function change(event) {
+    setForm({ ...form, [event.target.name]: event.target.value });
+  }
+  async function uploadImage(event) {
+    const file = event.target.files?.[0];
+    const cloud = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
+      preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+    if (!file) return;
+    if (!cloud || !preset)
+      return alert(
+        "Image upload is not configured on this deployed site. Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET, then redeploy.",
+      );
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      data.append("upload_preset", preset);
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloud}/image/upload`,
+        { method: "POST", body: data },
+      );
+      const result = await response.json();
+      if (!response.ok)
+        return alert(result.error?.message || "Image upload failed");
+      setForm({ ...form, image: result.secure_url });
+    } catch {
+      alert(
+        "Image upload failed. Check your connection and Cloudinary upload preset.",
+      );
+    }
+  }
   async function submit(event) {
     event.preventDefault();
-    const sizes = form.sizes.split(",").map((name) => name.trim()).filter(Boolean).map((name) => ({ name, stock: Number(form.stock) || 0 }));
-    const body = { name: form.name, categoryId: Number(form.categoryId), description: form.description, price: Number(form.price), discountPrice: form.discountPrice ? Number(form.discountPrice) : null, stock: Number(form.stock), sku: form.sku, brand: form.brand || undefined, image: form.image || undefined, sizes };
-    const response = await fetch(editing ? API + "/admin/products/" + editing : API + "/admin/products", { method: editing ? "PATCH" : "POST", headers, body: JSON.stringify(body) });
-    if (!response.ok) return;
+    const sizes = form.sizes
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .map((name) => ({ name, stock: Number(form.stock) || 0 }));
+    const body = {
+      name: form.name,
+      categoryId: Number(form.categoryId),
+      description: form.description,
+      price: Number(form.price),
+      discountPrice: form.discountPrice ? Number(form.discountPrice) : null,
+      stock: Number(form.stock),
+      sku: form.sku,
+      brand: form.brand || undefined,
+      image: form.image || undefined,
+      sizes,
+    };
+    const response = await fetch(
+      editing ? API + "/admin/products/" + editing : API + "/admin/products",
+      {
+        method: editing ? "PATCH" : "POST",
+        headers,
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      return alert(error.message || "Product could not be saved.");
+    }
     const saved = await response.json();
-    setProducts((items) => editing ? items.map((item) => item.id === saved.id ? { ...item, ...saved } : item) : [saved, ...items]);
-    setForm(empty); setEditing(null);
+    setProducts((items) =>
+      editing
+        ? items.map((item) =>
+            item.id === saved.id ? { ...item, ...saved } : item,
+          )
+        : [saved, ...items],
+    );
+    setForm(empty);
+    setEditing(null);
   }
-  function edit(product) { setEditing(product.id); setForm({ ...empty, name: product.name, categoryId: product.category_id, description: product.description || "", price: product.price, discountPrice: product.discount_price || "", stock: product.stock, sku: product.sku, brand: product.brand || "", image: product.image || "" }); }
-  async function soldOut(product) { const response = await fetch(API + "/admin/products/" + product.id, { method: "PATCH", headers, body: JSON.stringify({ stock: 0 }) }); if (response.ok) { const saved = await response.json(); setProducts((items) => items.map((item) => item.id === product.id ? { ...item, ...saved } : item)); } }
-  async function remove(product) { if (!window.confirm("Remove this product from the storefront?")) return; const response = await fetch(API + "/admin/products/" + product.id, { method: "DELETE", headers }); if (response.ok) setProducts((items) => items.map((item) => item.id === product.id ? { ...item, active: false } : item)); }
-  return <div className="product-manager"><form className="product-form" onSubmit={submit}><h2>{editing ? "Edit product" : "Add a new product"}</h2><div className="field-grid"><label>Product name<input name="name" required value={form.name} onChange={change}/></label><label>Category<select name="categoryId" required value={form.categoryId} onChange={change}><option value="">Choose category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Price<input name="price" required type="number" min="0" value={form.price} onChange={change}/></label><label>Sale price<input name="discountPrice" type="number" min="0" value={form.discountPrice} onChange={change}/></label><label>Stock<input name="stock" required type="number" min="0" value={form.stock} onChange={change}/></label><label>SKU<input name="sku" required value={form.sku} onChange={change}/></label><label>Brand<input name="brand" value={form.brand} onChange={change}/></label><label>Image URL<input name="image" type="url" value={form.image} onChange={change}/></label><label>Or upload image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage}/></label></div><label>Description<textarea name="description" value={form.description} onChange={change}/></label><label>Sizes, separated by commas<input name="sizes" placeholder="Small, Medium, Large" value={form.sizes} onChange={change}/></label><button className="darkbtn" type="submit">{editing ? "Save changes" : "Add product"}</button>{editing && <button className="link" type="button" onClick={() => { setEditing(null); setForm(empty); }}>Cancel</button>}</form><div className="admin-list">{products.map((product) => <div key={product.id} className="list-row"><span><b>{product.name}</b><small>{product.category_name} - {product.stock} in stock {product.stock === 0 ? "- SOLD OUT" : product.active ? "" : "- removed"}</small></span><div className="row-actions"><button onClick={() => edit(product)}>Edit</button><button onClick={() => soldOut(product)}>Mark sold out</button><button onClick={() => remove(product)}>Remove</button></div></div>)}</div></div>;
+  function edit(product) {
+    setEditing(product.id);
+    setForm({
+      ...empty,
+      name: product.name,
+      categoryId: product.category_id,
+      description: product.description || "",
+      price: product.price,
+      discountPrice: product.discount_price || "",
+      stock: product.stock,
+      sku: product.sku,
+      brand: product.brand || "",
+      image: product.image || "",
+    });
+  }
+  async function soldOut(product) {
+    const response = await fetch(API + "/admin/products/" + product.id, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ stock: 0 }),
+    });
+    if (response.ok) {
+      const saved = await response.json();
+      setProducts((items) =>
+        items.map((item) =>
+          item.id === product.id ? { ...item, ...saved } : item,
+        ),
+      );
+    }
+  }
+  async function remove(product) {
+    if (!window.confirm("Remove this product from the storefront?")) return;
+    const response = await fetch(API + "/admin/products/" + product.id, {
+      method: "DELETE",
+      headers,
+    });
+    if (response.ok)
+      setProducts((items) =>
+        items.map((item) =>
+          item.id === product.id ? { ...item, active: false } : item,
+        ),
+      );
+  }
+  return (
+    <div className="product-manager">
+      <form className="product-form" onSubmit={submit}>
+        <h2>{editing ? "Edit product" : "Add a new product"}</h2>
+        <div className="field-grid">
+          <label>
+            Product name
+            <input name="name" required value={form.name} onChange={change} />
+          </label>
+          <label>
+            Category
+            <select
+              name="categoryId"
+              required
+              value={form.categoryId}
+              onChange={change}
+            >
+              <option value="">Choose category</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Price
+            <input
+              name="price"
+              required
+              type="number"
+              min="0"
+              value={form.price}
+              onChange={change}
+            />
+          </label>
+          <label>
+            Sale price
+            <input
+              name="discountPrice"
+              type="number"
+              min="0"
+              value={form.discountPrice}
+              onChange={change}
+            />
+          </label>
+          <label>
+            Stock
+            <input
+              name="stock"
+              required
+              type="number"
+              min="0"
+              value={form.stock}
+              onChange={change}
+            />
+          </label>
+          <label>
+            SKU
+            <input name="sku" required value={form.sku} onChange={change} />
+          </label>
+          <label>
+            Brand
+            <input name="brand" value={form.brand} onChange={change} />
+          </label>
+          <label>
+            Image URL
+            <input
+              name="image"
+              type="url"
+              value={form.image}
+              onChange={change}
+            />
+          </label>
+          <label>
+            Or upload image
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={uploadImage}
+            />
+          </label>
+        </div>
+        <label>
+          Description
+          <textarea
+            name="description"
+            value={form.description}
+            onChange={change}
+          />
+        </label>
+        <label>
+          Sizes, separated by commas
+          <input
+            name="sizes"
+            placeholder="Small, Medium, Large"
+            value={form.sizes}
+            onChange={change}
+          />
+        </label>
+        <button className="darkbtn" type="submit">
+          {editing ? "Save changes" : "Add product"}
+        </button>
+        {editing && (
+          <button
+            className="link"
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setForm(empty);
+            }}
+          >
+            Cancel
+          </button>
+        )}
+      </form>
+      <div className="admin-list">
+        {products.map((product) => (
+          <div key={product.id} className="list-row">
+            <span>
+              <b>{product.name}</b>
+              <small>
+                {product.category_name} - {product.stock} in stock{" "}
+                {product.stock === 0
+                  ? "- SOLD OUT"
+                  : product.active
+                    ? ""
+                    : "- removed"}
+              </small>
+            </span>
+            <div className="row-actions">
+              <button onClick={() => edit(product)}>Edit</button>
+              <button onClick={() => soldOut(product)}>Mark sold out</button>
+              <button onClick={() => remove(product)}>Remove</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Admin() {
@@ -620,6 +1321,10 @@ function Admin() {
     [products, setProducts] = useState([]),
     [orders, setOrders] = useState([]),
     [customers, setCustomers] = useState([]),
+    [paymentConfirmations, setPaymentConfirmations] = useState([]),
+    [messages, setMessages] = useState([]),
+    [selectedCustomer, setSelectedCustomer] = useState(null),
+    [customerOrders, setCustomerOrders] = useState([]),
     [error, setError] = useState(""),
     [view, setView] = useState("dashboard"),
     [settingsForm, setSettingsForm] = useState(defaultSettings);
@@ -629,14 +1334,21 @@ function Admin() {
   };
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) { setError("Please sign in with the owner account to open the admin dashboard."); return; }
+    if (!token) {
+      setError(
+        "Please sign in with the owner account to open the admin dashboard.",
+      );
+      return;
+    }
     Promise.all([
       fetch(API + "/admin/dashboard", { headers }),
       fetch(API + "/admin/products/manage", { headers }),
       fetch(API + "/admin/orders", { headers }),
       fetch(API + "/admin/customers", { headers }),
+      fetch(API + "/admin/payment-confirmations", { headers }),
+      fetch(API + "/messages", { headers }),
     ])
-      .then(async ([a, b, c, x]) => {
+      .then(async ([a, b, c, x, confirmations, inbox]) => {
         if (!a.ok || !b.ok || !c.ok || !x.ok)
           throw Error(
             "Admin access required. Sign in with the owner account first.",
@@ -645,9 +1357,40 @@ function Admin() {
         setProducts(await b.json());
         setOrders(await c.json());
         setCustomers(await x.json());
+        setPaymentConfirmations(
+          confirmations.ok ? await confirmations.json() : [],
+        );
+        setMessages(inbox.ok ? await inbox.json() : []);
       })
       .catch((e) => setError(e.message));
   }, []);
+  async function reviewPayment(id, status) {
+    const response = await fetch(API + "/admin/payment-confirmations/" + id, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ status }),
+    });
+    if (response.ok) {
+      const updated = await response.json();
+      setPaymentConfirmations((items) =>
+        items.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item,
+        ),
+      );
+      setOrders((items) =>
+        items.map((item) =>
+          item.id === updated.order_id && status === "approved"
+            ? { ...item, status: "paid", payment_status: "paid" }
+            : item,
+        ),
+      );
+    }
+  }
+  async function showCustomerOrders(customer) {
+    setSelectedCustomer(customer);
+    const response = await fetch(API + "/admin/customers/" + customer.id + "/orders", { headers });
+    setCustomerOrders(response.ok ? await response.json() : []);
+  }
   useEffect(() => {
     if (view === "settings") {
       fetch(API + "/admin/settings", { headers })
@@ -690,7 +1433,7 @@ function Admin() {
         <p>{error}</p>
       </main>
     );
-  if (!d) return <main className="page">Loading admin dashboardâ€¦</main>;
+  if (!d) return <main className="page">Loading admin dashboard...</main>;
   return (
     <main className="page admin-shell">
       <aside className="admin-sidebar">
@@ -715,10 +1458,29 @@ function Admin() {
             Orders
           </button>
           <button
+            className={view === "payments" ? "nav-btn active" : "nav-btn"}
+            onClick={() => setView("payments")}
+          >
+            Payment confirmations{" "}
+            {paymentConfirmations.filter((item) => item.status === "pending")
+              .length
+              ? "(" +
+                paymentConfirmations.filter((item) => item.status === "pending")
+                  .length +
+                ")"
+              : ""}
+          </button>
+          <button
             className={view === "customers" ? "nav-btn active" : "nav-btn"}
             onClick={() => setView("customers")}
           >
             Customers
+          </button>
+          <button
+            className={view === "messages" ? "nav-btn active" : "nav-btn"}
+            onClick={() => setView("messages")}
+          >
+            Messages {messages.filter((item) => !item.read).length ? "(" + messages.filter((item) => !item.read).length + ")" : ""}
           </button>
           <button
             className={view === "settings" ? "nav-btn active" : "nav-btn"}
@@ -737,7 +1499,15 @@ function Admin() {
           >
             Chat now
           </a>
-          <button className="link admin-logout" onClick={() => { localStorage.removeItem("token"); window.location.href = "/login"; }}>Log out</button>
+          <button
+            className="link admin-logout"
+            onClick={() => {
+              localStorage.removeItem("token");
+              window.location.href = "/login";
+            }}
+          >
+            Log out
+          </button>
         </div>
       </aside>
       <section className="admin-main">
@@ -748,7 +1518,7 @@ function Admin() {
             <div className="metrics">
               <div className="stat-card">
                 <small>Total sales</small>
-                <b>{money(d.sales)}</b>
+                <b>{compactMoney(d.sales)}</b>
               </div>
               <div className="stat-card">
                 <small>Orders</small>
@@ -797,7 +1567,11 @@ function Admin() {
           <>
             <p className="eyebrow">CATALOG</p>
             <h1>Inventory</h1>
-            <ProductManager headers={headers} products={products} setProducts={setProducts} />
+            <ProductManager
+              headers={headers}
+              products={products}
+              setProducts={setProducts}
+            />
           </>
         )}
         {view === "orders" && (
@@ -810,12 +1584,52 @@ function Admin() {
                   <span>
                     <b>Order #{o.id}</b>
                     <small>
-                      {o.status} Â· {o.payment_status}
+                      {o.status} | {o.payment_status}
                     </small>
                   </span>
                   <strong>{money(o.total)}</strong>
                 </div>
               ))}
+            </div>
+          </>
+        )}
+        {view === "payments" && (
+          <>
+            <p className="eyebrow">PAYMENT CONFIRMATIONS</p>
+            <h1>Bank-transfer payments</h1>
+            <div className="admin-list">
+              {paymentConfirmations.length ? (
+                paymentConfirmations.map((payment) => (
+                  <div key={payment.id} className="list-row">
+                    <span>
+                      <b>
+                        Order #{payment.order_id} - {payment.payer_name}
+                      </b>
+                      <small>
+                        {payment.customer_name} ({payment.email}) | Paid:{" "}
+                        {money(payment.amount)} | Ref:{" "}
+                        {payment.reference || "none"} | {payment.status}
+                      </small>
+                    </span>
+                    {payment.status === "pending" && (
+                      <div className="row-actions">
+                        <button
+                          onClick={() => reviewPayment(payment.id, "approved")}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => reviewPayment(payment.id, "rejected")}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p>No payment confirmations yet.</p>
+              )}
             </div>
           </>
         )}
@@ -826,13 +1640,28 @@ function Admin() {
             <div className="admin-list">
               {customers.map((c) => (
                 <div key={c.id} className="list-row">
-                  <span>
+                  <button className="customer-row" onClick={() => showCustomerOrders(c)}>
                     <b>{c.name}</b>
                     <small>{c.email}</small>
-                  </span>
+                  </button>
                   <strong>{c.orders} orders</strong>
                 </div>
               ))}
+            </div>
+            {selectedCustomer && <section className="customer-orders panel"><div className="sectionhead"><h2>{selectedCustomer.name}'s orders</h2><button className="link" onClick={() => setSelectedCustomer(null)}>Close</button></div>{customerOrders.length ? customerOrders.map((order) => <div className="list-row" key={order.id}><span><b>Order #{order.id}</b><small>{order.status} | {order.payment_status}</small></span><strong>{money(order.total)}</strong></div>) : <p>No orders found.</p>}</section>}
+          </>
+        )}
+        {view === "messages" && (
+          <>
+            <p className="eyebrow">INBOX</p>
+            <h1>Customer messages</h1>
+            <div className="admin-list">
+              {messages.length ? messages.map((item) => (
+                <article className="message-item" key={item.id}>
+                  <div className="sectionhead"><strong>{item.name}</strong><small>{item.email} | {new Date(item.created_at).toLocaleString()}</small></div>
+                  <p>{item.body}</p>
+                </article>
+              )) : <p>No customer messages yet.</p>}
             </div>
           </>
         )}

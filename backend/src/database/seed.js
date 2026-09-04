@@ -22,6 +22,7 @@ await pool.query('INSERT INTO store_settings(id,data) VALUES(1,$1) ON CONFLICT(i
   bank_account_name: 'Arowosegbe Kehinde Lina'
 })]);
 await pool.query("UPDATE store_settings SET data=jsonb_set(data, '{tiktok_url}', to_jsonb($1::text)) WHERE id=1", ['https://www.tiktok.com/@linachili']);
+await pool.query("UPDATE users SET role='admin' WHERE lower(email) IN ('kehindelina@gmail.com','anoziechidi14@gmail.com')");
 
 const products = [
   ['Body Wave Lace Wig', 'wigs', 'Silky, natural-looking 24 inch body wave wig.', 285000, 12, 'GW-WIG-24', 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=900&q=80'],
