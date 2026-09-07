@@ -804,20 +804,32 @@ function Login() {
     [register, setRegister] = useState(false),
     [msg, showMsg, clearMsg] = useAutoMessage(),
     [accountType, setAccountType] = useState(""),
+    [submitting, setSubmitting] = useState(false),
     nav = useNavigate();
   const settings = useStore();
   async function submit(e) {
     e.preventDefault();
-    const r = await fetch(API + "/auth/" + (register ? "register" : "login"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, ...(register ? { name } : {}) }),
-    });
-    const d = await r.json();
-    if (!r.ok) return showMsg(d.message);
-    localStorage.setItem("token", d.token);
-    setAccountType(d.user.role === "admin" ? "admin" : "customer");
-    nav("/account");
+    setSubmitting(true);
+    clearMsg();
+    try {
+      const r = await fetch(API + "/auth/" + (register ? "register" : "login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password, ...(register ? { name: name.trim() } : {}) }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        showMsg(d.message || (register ? "Could not create your account." : "Could not sign you in."));
+        return;
+      }
+      localStorage.setItem("token", d.token);
+      setAccountType(d.user.role === "admin" ? "admin" : "customer");
+      nav("/account");
+    } catch {
+      showMsg("We could not reach the store. Please check your internet connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
   return (
     <main className="page auth">
@@ -860,8 +872,8 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button className="darkbtn">
-          {register ? "Create account" : "Sign in"}
+        <button className="darkbtn" disabled={submitting}>
+          {submitting ? "Please wait..." : register ? "Create account" : "Sign in"}
         </button>
       </form>
       {msg && <p>{msg} <button type="button" className="link" onClick={clearMsg}>×</button></p>}
