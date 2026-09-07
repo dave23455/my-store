@@ -90,7 +90,7 @@
         <form className="name-form" onSubmit={saveDisplayName}>
           <label>Display name<input required minLength="2" maxLength="100" value={displayName || user.name} onChange={(event) => setDisplayName(event.target.value)} /></label>
           <button className="darkbtn">Save name</button>
-          {nameMessage && <small>{nameMessage}</small>}
+          {nameMessage && <small>{nameMessage} <button type="button" className="link" onClick={() => setNameMessage("")} style={{fontSize: '0.8em'}}>✕</button></small>}
         </form>
         {user.role === "admin" && (
           <Link className="darkbtn" to="/admin">
@@ -142,6 +142,21 @@ import "./styles.css";
 const API =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? "/api" : "http://localhost:4000/api");
+const useAutoMessage = (initialValue = "") => {
+  const [message, setMessage] = useState(initialValue);
+  const timeoutRef = useRef(null);
+  useEffect(() => () => clearTimeout(timeoutRef.current), []);
+  const showMessage = (msg, duration = 3000) => {
+    setMessage(msg);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setMessage(""), duration);
+  };
+  const clearMessage = () => {
+    setMessage("");
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  };
+  return [message, showMessage, clearMessage];
+};
 const defaultSettings = {
   store_name: "LinaStyledYou",
   tag_line: "Premium beauty, delivered worldwide",
@@ -193,11 +208,14 @@ function Header() {
   const { cart } = useCart();
   const settings = useStore();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const nav = useNavigate();
   const wa = cleanWhatsApp(settings.whatsapp_number);
   useEffect(() => {
     const token = localStorage.getItem("token");
+    setIsLoggedIn(!!token);
     if (!token) {
       setIsAdmin(false);
       return;
@@ -207,6 +225,12 @@ function Header() {
       .then((data) => setIsAdmin(data?.user?.role === "admin"))
       .catch(() => setIsAdmin(false));
   }, [location.pathname]);
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+    setIsAdmin(false);
+    nav("/login");
+  };
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
@@ -251,6 +275,13 @@ function Header() {
           >
             WhatsApp
           </a>
+          {isLoggedIn ? (
+            <button className="link" onClick={handleLogout}>
+              Log out
+            </button>
+          ) : (
+            <Link to="/login">Log in</Link>
+          )}
           <Link className="cart-link" to="/cart" aria-label="Open cart">
             <span className="cart-icon" aria-hidden="true">
               🛒
@@ -384,7 +415,7 @@ function Product() {
     [question, setQuestion] = useState(""),
     [rating, setRating] = useState("5"),
     [reviewBody, setReviewBody] = useState(""),
-    [reviewMessage, setReviewMessage] = useState(""),
+    [reviewMessage, showReviewMessage, clearReviewMessage] = useAutoMessage(),
     { add } = useCart();
   const token = localStorage.getItem("token");
   useEffect(() => {
@@ -416,7 +447,7 @@ function Product() {
   }
   async function submitReview(e) {
     e.preventDefault();
-    if (!token) return setReviewMessage("Please sign in to leave a rating.");
+    if (!token) return showReviewMessage("Please sign in to leave a rating.");
     const r = await fetch(API + "/products/" + id + "/reviews", {
       method: "POST",
       headers: {
@@ -427,12 +458,12 @@ function Product() {
     });
     const data = await r.json();
     if (r.ok) {
-      setReviewMessage("Thank you for rating this product.");
+      showReviewMessage("Thank you for rating this product.");
       setReviews((items) => [
         { ...data, name: "You" },
         ...items.filter((item) => item.name !== "You"),
       ]);
-    } else setReviewMessage(data.message || "Could not save your rating.");
+    } else showReviewMessage(data.message || "Could not save your rating.");
   }
   if (!p) return <main className="page">Loading product...</main>;
   const chosen = p.variants?.find((v) => v.id === Number(choice));
@@ -514,7 +545,7 @@ function Product() {
           </select>
           <textarea required minLength="3" value={reviewBody} onChange={(e) => setReviewBody(e.target.value)} placeholder="Write your review" />
           <button className="darkbtn">Submit rating</button>
-          {reviewMessage && <p>{reviewMessage}</p>}
+          {reviewMessage && <p>{reviewMessage} <button type="button" className="link" onClick={clearReviewMessage}>×</button></p>}
         </form>
         <h2>Questions & chat</h2>
         {comments.map((c) => (
@@ -588,7 +619,7 @@ function CartPage() {
 function Checkout() {
   const { cart } = useCart();
   const settings = useStore();
-  const [message, setMessage] = useState(""),
+  const [message, showMessage, clearMessage] = useAutoMessage(),
     [orderId, setOrderId] = useState(""),
     [thankYou, setThankYou] = useState(false),
     [confirmation, setConfirmation] = useState({
@@ -693,7 +724,7 @@ function Checkout() {
           Place order & pay
         </button>
       </form>
-      {message && <p>{message}</p>}
+      {message && <p>{message} <button type="button" className="link" onClick={clearMessage} style={{fontSize: '0.8em', marginLeft: '0.5em'}}>×</button></p>}
       {thankYou && (
         <div className="payment-thankyou">
           <strong>Thank you for shopping with us</strong>
@@ -771,7 +802,7 @@ function Login() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [register, setRegister] = useState(false),
-    [msg, setMsg] = useState(""),
+    [msg, showMsg, clearMsg] = useAutoMessage(),
     [accountType, setAccountType] = useState(""),
     nav = useNavigate();
   const settings = useStore();
@@ -783,7 +814,7 @@ function Login() {
       body: JSON.stringify({ email, password, ...(register ? { name } : {}) }),
     });
     const d = await r.json();
-    if (!r.ok) return setMsg(d.message);
+    if (!r.ok) return showMsg(d.message);
     localStorage.setItem("token", d.token);
     setAccountType(d.user.role === "admin" ? "admin" : "customer");
     nav("/account");
@@ -833,7 +864,7 @@ function Login() {
           {register ? "Create account" : "Sign in"}
         </button>
       </form>
-      {msg && <p>{msg}</p>}
+      {msg && <p>{msg} <button type="button" className="link" onClick={clearMsg}>×</button></p>}
       {accountType && (
         <p>Signed in as {accountType === "admin" ? "admin" : "customer"}.</p>
       )}
@@ -850,7 +881,7 @@ function Login() {
 }
 function ForgotPassword() {
   const [email, setEmail] = useState(""),
-    [message, setMessage] = useState("");
+    [message, showMessage, clearMessage] = useAutoMessage();
   async function submit(e) {
     e.preventDefault();
     const r = await fetch(API + "/auth/forgot-password", {
@@ -859,7 +890,7 @@ function ForgotPassword() {
       body: JSON.stringify({ email }),
     });
     const d = await r.json();
-    setMessage(d.message);
+    showMessage(d.message);
   }
   return (
     <main className="page auth">
@@ -875,26 +906,26 @@ function ForgotPassword() {
         />
         <button className="darkbtn">Send reset link</button>
       </form>
-      {message && <p>{message}</p>}
+      {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
       <Link to="/login">Back to sign in</Link>
     </main>
   );
 }
 function ResetPassword() {
   const [password, setPassword] = useState(""),
-    [message, setMessage] = useState(""),
+    [message, showMessage, clearMessage] = useAutoMessage(),
     nav = useNavigate();
   async function submit(e) {
     e.preventDefault();
     const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return setMessage("This reset link is invalid.");
+    if (!token) return showMessage("This reset link is invalid.");
     const r = await fetch(API + "/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password }),
     });
     const d = await r.json();
-    setMessage(d.message);
+    showMessage(d.message);
     if (r.ok) setTimeout(() => nav("/login"), 1500);
   }
   return (
@@ -911,7 +942,7 @@ function ResetPassword() {
         />
         <button className="darkbtn">Update password</button>
       </form>
-      {message && <p>{message}</p>}
+      {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
     </main>
   );
 }
@@ -981,7 +1012,7 @@ function Contact() {
   const [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [body, setBody] = useState(""),
-    [message, setMessage] = useState("");
+    [message, showMessage, clearMessage] = useAutoMessage();
   const settings = useStore();
   async function submit(e) {
     e.preventDefault();
@@ -990,7 +1021,7 @@ function Contact() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, body }),
     });
-    setMessage(
+    showMessage(
       r.ok
         ? "Thank you. Your message has been sent successfully."
         : (await r.json()).message,
@@ -1045,7 +1076,7 @@ function Contact() {
           <button className="darkbtn">Send message</button>
         </form>
       </div>
-      {message && <p>{message}</p>}
+      {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
     </main>
   );
 }

@@ -41,7 +41,7 @@ Vercel can host the React storefront publicly, but it does not replace the Expre
 
 1. Import the GitHub repository into Vercel.
 2. Leave the project root as the repository root. The included `vercel.json` builds `frontend` and serves its `dist` folder.
-3. Add `VITE_API_URL` in Vercel with the API URL, for example `https://api.linastyle.shop/api`.
+3. Add `VITE_API_URL` in Vercel with `https://linastyle-api.onrender.com/api` until `api.linastyle.shop` has been verified.
 4. Deploy. Vercel provides a public `*.vercel.app` URL that works on phones and other devices.
 5. Set the API's `CLIENT_URL` on Render to your storefront origin, such as `https://linastyle.shop,https://www.linastyle.shop`, then redeploy the API.
 
@@ -49,7 +49,7 @@ For a custom domain, add it in Vercel and use that domain for `CLIENT_URL`. The 
 
 ## Render + linastyle.shop
 
-`render.yaml` defines a Render Postgres database, API, and static storefront. Push this repository to GitHub, then in Render choose **New > Blueprint** and select that repository. In the Render dashboard add `linastyle.shop` and `www.linastyle.shop` as custom domains on the `linastyle-web` service, and `api.linastyle.shop` on `linastyle-api`. Render will show the DNS CNAME records to add at your domain registrar, and it provisions HTTPS after DNS verifies.
+`render.yaml` defines a Render Postgres database, API, and static storefront. Push this repository to GitHub, then in Render choose **New > Blueprint** and select that repository. The storefront uses `https://linastyle-api.onrender.com/api` until the custom API hostname is verified. In the Render dashboard add `linastyle.shop` and `www.linastyle.shop` as custom domains on the `linastyle-web` service, and `api.linastyle.shop` on `linastyle-api`. Render will show the DNS CNAME records to add at your domain registrar, and it provisions HTTPS after DNS verifies.
 
 Set these secret values in the `linastyle-api` Render service after the Blueprint is created: `PAYSTACK_SECRET_KEY`, `RESEND_API_KEY`, and `EMAIL_FROM`. Set `PAYMENT_PROVIDER=paystack`. In Paystack set the webhook URL to `https://api.linastyle.shop/api/payments/webhook`. The application uses Paystack's server-side initialize/verify endpoints and validates webhook signatures before marking an order paid.
 

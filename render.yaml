@@ -7,7 +7,7 @@ services:
     rootDir: frontend
     envVars:
       - key: VITE_API_URL
-        value: https://api.linastyle.shop/api
+        value: https://linastyle-api.onrender.com/api
   - type: web
     name: linastyle-api
     runtime: node
@@ -15,7 +15,7 @@ services:
     plan: free
     rootDir: backend
     buildCommand: npm ci
-    startCommand: npm start
+    startCommand: npm run db:migrate && npm run db:seed && npm start
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
@@ -25,7 +25,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        value: https://linastyle.shop,https://www.linastyle.shop
+        value: https://my-store-ten-phi.vercel.app,https://linastyle.shop,https://www.linastyle.shop
       - key: STORE_CURRENCY
         value: NGN
       - key: PAYMENT_PROVIDER
