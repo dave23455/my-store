@@ -25,7 +25,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        value: https://my-store-ten-phi.vercel.app,https://linastyle.shop,https://www.linastyle.shop
+        value: https://linastyle-store.vercel.app,https://my-store-ten-phi.vercel.app,https://linastyle.shop,https://www.linastyle.shop
       - key: STORE_CURRENCY
         value: NGN
       - key: PAYMENT_PROVIDER
