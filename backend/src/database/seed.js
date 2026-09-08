@@ -1,4 +1,5 @@
-﻿import { pool } from '../config/db.js';
+﻿import bcrypt from 'bcryptjs';
+import { pool } from '../config/db.js';
 
 const categories = ['Hair', 'Wigs', 'Bundles', 'Closures', 'Frontals', 'Clothing', 'Shoes', 'Bags', 'Beauty', 'Accessories'];
 for (const name of categories) {
@@ -23,6 +24,18 @@ await pool.query('INSERT INTO store_settings(id,data) VALUES(1,$1) ON CONFLICT(i
 })]);
 await pool.query("UPDATE store_settings SET data=jsonb_set(data, '{tiktok_url}', to_jsonb($1::text)) WHERE id=1", ['https://www.tiktok.com/@linachili']);
 await pool.query("UPDATE users SET role='admin' WHERE lower(email) IN ('kehindelina@gmail.com','anoziechidi14@gmail.com')");
+
+if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+  const email = process.env.ADMIN_EMAIL.trim().toLowerCase();
+  const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
+  await pool.query(
+    `INSERT INTO users(name,email,password_hash,role)
+     VALUES($1,$2,$3,'admin')
+     ON CONFLICT(email) DO UPDATE SET role='admin'`,
+    [process.env.ADMIN_NAME || 'Store Admin', email, passwordHash],
+  );
+  console.log(`Admin account ready for ${email}`);
+}
 
 const products = [
   ['Body Wave Lace Wig', 'wigs', 'Silky, natural-looking 24 inch body wave wig.', 285000, 12, 'GW-WIG-24', 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=900&q=80'],
