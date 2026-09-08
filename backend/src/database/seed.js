@@ -38,18 +38,24 @@ if (process.env.OWNER_EMAIL && process.env.OWNER_PASSWORD) {
 }
 
 if (process.env.ADMIN_ACCOUNTS) {
-  const accounts = JSON.parse(process.env.ADMIN_ACCOUNTS);
-  for (const account of accounts) {
-    const email = account.email.trim().toLowerCase();
-    const passwordHash = await bcrypt.hash(account.password, 12);
-    await pool.query(
-      `INSERT INTO users(name,email,password_hash,role)
-       VALUES($1,$2,$3,'admin')
-       ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
-      [account.name || 'Store Admin', email, passwordHash],
-    );
+  try {
+    const accounts = JSON.parse(process.env.ADMIN_ACCOUNTS);
+    if (!Array.isArray(accounts)) throw new Error('ADMIN_ACCOUNTS must be a JSON array');
+    for (const account of accounts) {
+      if (!account.email || !account.password) throw new Error('Each admin account needs email and password');
+      const email = account.email.trim().toLowerCase();
+      const passwordHash = await bcrypt.hash(account.password, 12);
+      await pool.query(
+        `INSERT INTO users(name,email,password_hash,role)
+         VALUES($1,$2,$3,'admin')
+         ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
+        [account.name || 'Store Admin', email, passwordHash],
+      );
+    }
+    console.log(`Admin accounts ready: ${accounts.length}`);
+  } catch (error) {
+    console.error(`ADMIN_ACCOUNTS was ignored: ${error.message}`);
   }
-  console.log(`Admin accounts ready: ${accounts.length}`);
 }
 
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
