@@ -205,6 +205,7 @@ function Brand() {
   );
 }
 function Header() {
+  const { cart } = useCart();
   const settings = useStore();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
