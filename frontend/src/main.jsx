@@ -617,7 +617,7 @@ function CartPage() {
   );
 }
 function Checkout() {
-  const { cart } = useCart();
+  const { cart, clear } = useCart();
   const settings = useStore();
   const [message, showMessage, clearMessage] = useAutoMessage(),
     [orderId, setOrderId] = useState(""),
@@ -688,6 +688,7 @@ function Checkout() {
     const d = await r.json();
     if (r.ok) {
       setOrderId(d.id);
+      clear();
       const payment = await fetch(API + "/payments/initialize", {
         method: "POST",
         headers: {
@@ -1493,6 +1494,18 @@ function Admin() {
     <main className="page admin-shell">
       <aside className="admin-sidebar">
         <div className="logo">LinaStyledYou</div>
+        <label className="admin-view-select">
+          <span>Open section</span>
+          <select value={view} onChange={(event) => setView(event.target.value)}>
+            <option value="dashboard">Dashboard</option>
+            <option value="catalog">Catalog</option>
+            <option value="orders">Orders</option>
+            <option value="payments">Payment confirmations</option>
+            <option value="customers">Customers</option>
+            <option value="messages">Messages</option>
+            <option value="settings">Store settings</option>
+          </select>
+        </label>
         <nav className="admin-nav">
           <button
             className={view === "dashboard" ? "nav-btn active" : "nav-btn"}
@@ -1898,6 +1911,7 @@ function App() {
   const value = useMemo(
     () => ({
       cart,
+      clear: () => setCart([]),
       add: (p) =>
         setCart((c) => {
           let x = c.find((i) => i.id === p.id);

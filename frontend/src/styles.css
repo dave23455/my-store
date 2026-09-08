@@ -170,6 +170,7 @@ nav a { font-size: 14px; }
   background: #f8f3ed; border: 1px solid #e6ddd0; border-radius: 20px; padding: 20px; position: sticky; top: 20px;
 }
 .admin-nav { display: grid; gap: 10px; margin: 24px 0; }
+.admin-view-select { display: none; }
 .nav-btn {
   background: transparent; border: 1px solid #e2d8ca; border-radius: 12px; padding: 12px 16px; text-align: left; cursor: pointer; color: #243229; font-weight: 700;
 }
@@ -300,6 +301,10 @@ nav a, .sectionhead a, .footer-links a, .contact-card a, .page a { color: #bd075
   .admin-shell { gap: 12px; padding: 16px; }
   .admin-sidebar, .admin-main { padding: 14px; border-radius: 14px; }
   .admin-nav { gap: 6px; margin: 14px 0; }
+  .admin-view-select { display: grid; gap: 6px; margin: 14px 0; font-size: 12px; font-weight: 700; }
+  .admin-view-select span { color: #7b7a74; text-transform: uppercase; letter-spacing: .08em; }
+  .admin-view-select select { width: 100%; padding: 11px 12px; border: 1px solid #e2d8ca; border-radius: 9px; background: #fff; color: #243229; font: inherit; }
+  .admin-nav { display: none; }
   .nav-btn { padding: 10px 12px; border-radius: 9px; font-size: 13px; }
   .metrics { gap: 8px; margin: 12px 0; }
   .stat-card { padding: 12px; border-radius: 11px; }
