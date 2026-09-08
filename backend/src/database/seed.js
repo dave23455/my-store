@@ -25,6 +25,33 @@ await pool.query('INSERT INTO store_settings(id,data) VALUES(1,$1) ON CONFLICT(i
 await pool.query("UPDATE store_settings SET data=jsonb_set(data, '{tiktok_url}', to_jsonb($1::text)) WHERE id=1", ['https://www.tiktok.com/@linachili']);
 await pool.query("UPDATE users SET role='admin' WHERE lower(email) IN ('kehindelina@gmail.com','anoziechidi14@gmail.com')");
 
+if (process.env.OWNER_EMAIL && process.env.OWNER_PASSWORD) {
+  const email = process.env.OWNER_EMAIL.trim().toLowerCase();
+  const passwordHash = await bcrypt.hash(process.env.OWNER_PASSWORD, 12);
+  await pool.query(
+    `INSERT INTO users(name,email,password_hash,role)
+     VALUES($1,$2,$3,'owner')
+     ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='owner'`,
+    [process.env.OWNER_NAME || 'Store Owner', email, passwordHash],
+  );
+  console.log(`Owner account ready for ${email}`);
+}
+
+if (process.env.ADMIN_ACCOUNTS) {
+  const accounts = JSON.parse(process.env.ADMIN_ACCOUNTS);
+  for (const account of accounts) {
+    const email = account.email.trim().toLowerCase();
+    const passwordHash = await bcrypt.hash(account.password, 12);
+    await pool.query(
+      `INSERT INTO users(name,email,password_hash,role)
+       VALUES($1,$2,$3,'admin')
+       ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
+      [account.name || 'Store Admin', email, passwordHash],
+    );
+  }
+  console.log(`Admin accounts ready: ${accounts.length}`);
+}
+
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const email = process.env.ADMIN_EMAIL.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);

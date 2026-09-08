@@ -1,6 +1,6 @@
 ﻿CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,name VARCHAR(100) NOT NULL,email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,role VARCHAR(20) NOT NULL DEFAULT 'customer' CHECK(role IN('customer','employee','admin')),phone VARCHAR(50),created_at TIMESTAMPTZ DEFAULT now());
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check; ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN('customer','employee','admin'));
+CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,name VARCHAR(100) NOT NULL,email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,role VARCHAR(20) NOT NULL DEFAULT 'customer' CHECK(role IN('customer','employee','admin','owner')),phone VARCHAR(50),created_at TIMESTAMPTZ DEFAULT now());
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check; ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN('customer','employee','admin','owner'));
 CREATE TABLE IF NOT EXISTS password_reset_tokens(id SERIAL PRIMARY KEY,user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,token_hash TEXT NOT NULL UNIQUE,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS store_settings(id SMALLINT PRIMARY KEY DEFAULT 1 CHECK(id=1),data JSONB NOT NULL DEFAULT '{}'::jsonb,updated_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS categories(id SERIAL PRIMARY KEY,name VARCHAR(100) UNIQUE NOT NULL,slug VARCHAR(120) UNIQUE NOT NULL,active BOOLEAN DEFAULT true,created_at TIMESTAMPTZ DEFAULT now());

@@ -42,6 +42,14 @@ services:
         sync: false
       - key: ADMIN_NAME
         sync: false
+      - key: ADMIN_ACCOUNTS
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: OWNER_NAME
+        sync: false
 databases:
   - name: linastyle-db
     region: frankfurt

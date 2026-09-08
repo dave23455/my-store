@@ -85,14 +85,14 @@
           <b>Email:</b> {user.email}
         </p>
         <p>
-          <b>Account type:</b> {user.role === "admin" ? "Owner" : "Customer"}
+          <b>Account type:</b> {user.role === "owner" ? "Owner" : user.role === "admin" ? "Admin" : "Customer"}
         </p>
         <form className="name-form" onSubmit={saveDisplayName}>
           <label>Display name<input required minLength="2" maxLength="100" value={displayName || user.name} onChange={(event) => setDisplayName(event.target.value)} /></label>
           <button className="darkbtn">Save name</button>
           {nameMessage && <small>{nameMessage} <button type="button" className="link" onClick={() => setNameMessage("")} style={{fontSize: '0.8em'}}>✕</button></small>}
         </form>
-        {user.role === "admin" && (
+        {['admin', 'owner'].includes(user.role) && (
           <Link className="darkbtn" to="/admin">
             Open product catalog
           </Link>
@@ -222,7 +222,7 @@ function Header() {
     }
     fetch(API + "/auth/me", { headers: { Authorization: "Bearer " + token } })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setIsAdmin(data?.user?.role === "admin"))
+      .then((data) => setIsAdmin(['admin', 'owner'].includes(data?.user?.role)))
       .catch(() => setIsAdmin(false));
   }, [location.pathname]);
   const handleLogout = () => {
@@ -823,7 +823,7 @@ function Login() {
         return;
       }
       localStorage.setItem("token", d.token);
-      setAccountType(d.user.role === "admin" ? "admin" : "customer");
+      setAccountType(d.user.role === "owner" ? "owner" : d.user.role === "admin" ? "admin" : "customer");
       nav("/account");
     } catch {
       showMsg("We could not reach the store. Please check your internet connection and try again.");
