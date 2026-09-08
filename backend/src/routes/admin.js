@@ -2,6 +2,8 @@
 import { query } from "../config/db.js";
 import { authenticate, adminOnly } from "../middleware/auth.js";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+import { ownerOnly } from "../middleware/auth.js";
 const r = Router();
 r.use(authenticate, adminOnly);
 const defaultSettings = {
@@ -250,6 +252,30 @@ r.get("/customers", async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+r.get("/staff", async (req, res, next) => {
+  try {
+    res.json((await query("SELECT id,name,email,role,created_at FROM users WHERE role IN('admin','owner') ORDER BY role DESC,created_at")).rows);
+  } catch (e) { next(e); }
+});
+r.post("/staff", ownerOnly, async (req, res, next) => {
+  try {
+    const value = z.object({ name: z.string().min(2).max(100), email: z.string().email(), password: z.string().min(8), role: z.enum(["admin", "owner"]).default("admin") }).parse(req.body);
+    if (value.role === "owner") {
+      const existingOwner = await query("SELECT id FROM users WHERE role='owner'");
+      if (existingOwner.rowCount) return res.status(409).json({ message: "Only one owner account is allowed." });
+    }
+    const passwordHash = await bcrypt.hash(value.password, 12);
+    const result = await query("INSERT INTO users(name,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,name,email,role,created_at", [value.name.trim(), value.email.toLowerCase(), passwordHash, value.role]);
+    res.status(201).json(result.rows[0]);
+  } catch (e) { if (e.code === "23505") return res.status(409).json({ message: "An account with this email already exists." }); next(e); }
+});
+r.delete("/staff/:id", ownerOnly, async (req, res, next) => {
+  try {
+    const result = await query("DELETE FROM users WHERE id=$1 AND role='admin' RETURNING id", [req.params.id]);
+    if (!result.rowCount) return res.status(409).json({ message: "Only admin accounts can be removed here." });
+    res.status(204).end();
+  } catch (e) { next(e); }
 });
 r.get("/customers/:id/orders", async (req, res, next) => {
   try {

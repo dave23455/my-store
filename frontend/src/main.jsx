@@ -1377,6 +1377,9 @@ function Admin() {
     [products, setProducts] = useState([]),
     [orders, setOrders] = useState([]),
     [customers, setCustomers] = useState([]),
+    [staff, setStaff] = useState([]),
+    [staffForm, setStaffForm] = useState({ name: "", email: "", password: "", role: "admin" }),
+    [staffMessage, setStaffMessage] = useState(""),
     [paymentConfirmations, setPaymentConfirmations] = useState([]),
     [messages, setMessages] = useState([]),
     [selectedCustomer, setSelectedCustomer] = useState(null),
@@ -1401,10 +1404,11 @@ function Admin() {
       fetch(API + "/admin/products/manage", { headers }),
       fetch(API + "/admin/orders", { headers }),
       fetch(API + "/admin/customers", { headers }),
+      fetch(API + "/admin/staff", { headers }),
       fetch(API + "/admin/payment-confirmations", { headers }),
       fetch(API + "/messages", { headers }),
     ])
-      .then(async ([a, b, c, x, confirmations, inbox]) => {
+      .then(async ([a, b, c, x, team, confirmations, inbox]) => {
         if (!a.ok || !b.ok || !c.ok || !x.ok)
           throw Error(
             "Admin access required. Sign in with the owner account first.",
@@ -1413,6 +1417,7 @@ function Admin() {
         setProducts(await b.json());
         setOrders(await c.json());
         setCustomers(await x.json());
+        setStaff(team.ok ? await team.json() : []);
         setPaymentConfirmations(
           confirmations.ok ? await confirmations.json() : [],
         );
@@ -1446,6 +1451,21 @@ function Admin() {
     setSelectedCustomer(customer);
     const response = await fetch(API + "/admin/customers/" + customer.id + "/orders", { headers });
     setCustomerOrders(response.ok ? await response.json() : []);
+  }
+  async function addStaff(event) {
+    event.preventDefault();
+    const response = await fetch(API + "/admin/staff", { method: "POST", headers, body: JSON.stringify(staffForm) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setStaffMessage(data.message || "Staff account could not be created.");
+    setStaff((items) => [...items, data]);
+    setStaffForm({ name: "", email: "", password: "", role: "admin" });
+    setStaffMessage("Staff account created.");
+  }
+  async function removeStaff(id) {
+    if (!window.confirm("Remove this admin account?")) return;
+    const response = await fetch(API + "/admin/staff/" + id, { method: "DELETE", headers });
+    if (response.ok) setStaff((items) => items.filter((item) => item.id !== id));
+    else { const data = await response.json().catch(() => ({})); setStaffMessage(data.message || "Staff account could not be removed."); }
   }
   useEffect(() => {
     if (view === "settings") {
@@ -1502,6 +1522,7 @@ function Admin() {
             <option value="orders">Orders</option>
             <option value="payments">Payment confirmations</option>
             <option value="customers">Customers</option>
+            <option value="staff">Staff</option>
             <option value="messages">Messages</option>
             <option value="settings">Store settings</option>
           </select>
@@ -1544,6 +1565,7 @@ function Admin() {
           >
             Customers
           </button>
+          <button className={view === "staff" ? "nav-btn active" : "nav-btn"} onClick={() => setView("staff")}>Staff</button>
           <button
             className={view === "messages" ? "nav-btn active" : "nav-btn"}
             onClick={() => setView("messages")}
@@ -1717,6 +1739,21 @@ function Admin() {
               ))}
             </div>
             {selectedCustomer && <section className="customer-orders panel"><div className="sectionhead"><h2>{selectedCustomer.name}'s orders</h2><button className="link" onClick={() => setSelectedCustomer(null)}>Close</button></div>{customerOrders.length ? customerOrders.map((order) => <div className="list-row" key={order.id}><span><b>Order #{order.id}</b><small>{order.status} | {order.payment_status}</small></span><strong>{money(order.total)}</strong></div>) : <p>No orders found.</p>}</section>}
+          </>
+        )}
+        {view === "staff" && (
+          <>
+            <p className="eyebrow">TEAM ACCESS</p>
+            <h1>Admins and owner</h1>
+            <form className="contact staff-form" onSubmit={addStaff}>
+              <input required minLength="2" placeholder="Name" value={staffForm.name} onChange={(event) => setStaffForm({ ...staffForm, name: event.target.value })} />
+              <input required type="email" placeholder="Email" value={staffForm.email} onChange={(event) => setStaffForm({ ...staffForm, email: event.target.value })} />
+              <input required minLength="8" type="password" placeholder="Temporary password" value={staffForm.password} onChange={(event) => setStaffForm({ ...staffForm, password: event.target.value })} />
+              <select value={staffForm.role} onChange={(event) => setStaffForm({ ...staffForm, role: event.target.value })}><option value="admin">Admin</option><option value="owner">Owner</option></select>
+              <button className="darkbtn">Add staff account</button>
+              {staffMessage && <p>{staffMessage}</p>}
+            </form>
+            <div className="admin-list">{staff.map((member) => <div className="list-row" key={member.id}><span><b>{member.name}</b><small>{member.email} | {member.role}</small></span>{member.role === "admin" && <button onClick={() => removeStaff(member.id)}>Remove</button>}</div>)}</div>
           </>
         )}
         {view === "messages" && (
@@ -1900,8 +1937,12 @@ function Footer() {
   );
 }
 function App() {
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("store-cart") || "[]"); }
+    catch { return []; }
+  });
   const [settings, setSettings] = useState(defaultSettings);
+  useEffect(() => { localStorage.setItem("store-cart", JSON.stringify(cart)); }, [cart]);
   useEffect(() => {
     fetch(API + "/settings")
       .then((r) => (r.ok ? r.json() : Promise.resolve(defaultSettings)))
