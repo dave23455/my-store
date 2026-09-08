@@ -64,7 +64,7 @@ if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   await pool.query(
     `INSERT INTO users(name,email,password_hash,role)
      VALUES($1,$2,$3,'admin')
-     ON CONFLICT(email) DO UPDATE SET role='admin'`,
+      ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
     [process.env.ADMIN_NAME || 'Store Admin', email, passwordHash],
   );
   console.log(`Admin account ready for ${email}`);
