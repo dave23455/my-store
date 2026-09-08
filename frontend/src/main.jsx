@@ -205,9 +205,6 @@ function Brand() {
   );
 }
 function Header() {
-  const { cart } = useCart();
-  const settings = useStore();
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
@@ -1944,6 +1941,19 @@ function App() {
   const [settings, setSettings] = useState(defaultSettings);
   useEffect(() => { localStorage.setItem("store-cart", JSON.stringify(cart)); }, [cart]);
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const headers = { Authorization: "Bearer " + token };
+    fetch(API + "/cart", { headers })
+      .then((response) => response.ok ? response.json() : [])
+      .then((items) => setCart(items.map((item) => ({ ...item, id: item.product_id, cartItemId: item.id }))))
+      .catch(() => {});
+  }, []);
+  function authHeaders() {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: "Bearer " + token, "Content-Type": "application/json" } : null;
+  }
+  useEffect(() => {
     fetch(API + "/settings")
       .then((r) => (r.ok ? r.json() : Promise.resolve(defaultSettings)))
       .then(setSettings)
@@ -1952,8 +1962,20 @@ function App() {
   const value = useMemo(
     () => ({
       cart,
-      clear: () => setCart([]),
-      add: (p) =>
+      clear: () => {
+        setCart([]);
+        const headers = authHeaders();
+        if (headers) fetch(API + "/cart", { method: "DELETE", headers }).catch(() => {});
+      },
+      add: (p) => {
+        const headers = authHeaders();
+        if (headers) {
+          fetch(API + "/cart/items", { method: "POST", headers, body: JSON.stringify({ productId: p.id, quantity: 1, variantId: p.variantId || null }) })
+            .then(() => fetch(API + "/cart", { headers }))
+            .then((response) => response.ok ? response.json() : [])
+            .then((items) => setCart(items.map((item) => ({ ...item, id: item.product_id, cartItemId: item.id }))));
+          return;
+        }
         setCart((c) => {
           let x = c.find((i) => i.id === p.id);
           return x
@@ -1963,19 +1985,25 @@ function App() {
                   : i,
               )
             : [...c, { ...p, quantity: 1 }];
-        }),
-      remove: (id) => setCart((c) => c.filter((i) => i.id !== id)),
-      change: (id, d) =>
-        setCart((c) =>
-          c.map((i) =>
-            i.id === id
-              ? {
-                  ...i,
-                  quantity: Math.max(1, Math.min(i.stock, i.quantity + d)),
-                }
-              : i,
-          ),
-        ),
+        });
+      },
+      remove: (id) => {
+        setCart((c) => {
+          const item = c.find((entry) => entry.id === id);
+          const headers = authHeaders();
+          if (headers && item?.cartItemId) fetch(API + "/cart/items/" + item.cartItemId, { method: "DELETE", headers }).catch(() => {});
+          return c.filter((i) => i.id !== id);
+        });
+      },
+      change: (id, d) => {
+        setCart((c) => {
+          const item = c.find((entry) => entry.id === id);
+          const quantity = item ? Math.max(1, Math.min(item.stock, item.quantity + d)) : 1;
+          const headers = authHeaders();
+          if (headers && item?.cartItemId) fetch(API + "/cart/items/" + item.cartItemId, { method: "PUT", headers, body: JSON.stringify({ quantity }) }).catch(() => {});
+          return c.map((entry) => entry.id === id ? { ...entry, quantity } : entry);
+        });
+      },
     }),
     [cart],
   );
