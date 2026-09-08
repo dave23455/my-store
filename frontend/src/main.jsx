@@ -205,6 +205,8 @@ function Brand() {
   );
 }
 function Header() {
+  const settings = useStore();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
