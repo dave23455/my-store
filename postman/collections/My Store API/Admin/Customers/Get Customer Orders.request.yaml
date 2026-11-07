@@ -1,0 +1,10 @@
+$kind: http-request
+name: Get Customer Orders
+method: GET
+url: '{{baseUrl}}/api/admin/customers/{{customerId}}/orders'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

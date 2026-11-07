@@ -1,0 +1,10 @@
+$kind: http-request
+name: Get Settings
+method: GET
+url: '{{baseUrl}}/api/admin/settings'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

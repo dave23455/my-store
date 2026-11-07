@@ -1,0 +1,20 @@
+$kind: http-request
+name: Create Product
+method: POST
+url: '{{baseUrl}}/api/admin/products'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "New Product",
+      "description": "A great product",
+      "price": 5000,
+      "categoryId": "{{categoryId}}",
+      "stock": 100
+    }

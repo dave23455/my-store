@@ -18,9 +18,9 @@ const defaultSettings = {
   whatsapp_message: "Hello! I would like to make an order.",
   currency: "NGN",
   shipping_message: "We ship worldwide",
-  bank_name: "First Bank",
-  bank_account_number: "3221851035",
-  bank_account_name: "Arowosegbe Kehinde Lina",
+  bank_name: "",
+  bank_account_number: "",
+  bank_account_name: "",
 };
 
 r.get("/dashboard", async (req, res, next) => {
@@ -191,13 +191,31 @@ r.delete("/products/:id", async (req, res, next) => {
 });
 r.get("/orders", async (req, res, next) => {
   try {
-    res.json(
-      (
-        await query(
-          "SELECT o.*,u.name,u.email FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.created_at DESC",
-        )
-      ).rows,
-    );
+    const result = await query(`
+      SELECT o.*,
+             u.name AS customer_name,
+             u.email AS customer_email,
+             COALESCE(
+               json_agg(
+                 json_build_object(
+                   'id', oi.id,
+                   'product_id', oi.product_id,
+                   'variant_id', oi.variant_id,
+                   'name', oi.name,
+                   'quantity', oi.quantity,
+                   'unit_price', oi.unit_price
+                 )
+                 ORDER BY oi.id
+               ) FILTER (WHERE oi.id IS NOT NULL),
+               '[]'::json
+             ) AS items
+      FROM orders o
+      LEFT JOIN users u ON u.id = o.user_id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      GROUP BY o.id, u.name, u.email
+      ORDER BY o.created_at DESC
+    `);
+    res.json(result.rows.map((order) => ({ ...order, items: order.items || [] })));
   } catch (e) {
     next(e);
   }
@@ -279,7 +297,32 @@ r.delete("/staff/:id", ownerOnly, async (req, res, next) => {
 });
 r.get("/customers/:id/orders", async (req, res, next) => {
   try {
-    res.json((await query("SELECT o.*,u.name,u.email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.user_id=$1 ORDER BY o.created_at DESC", [req.params.id])).rows);
+    const result = await query(`
+      SELECT o.*,
+             u.name AS customer_name,
+             u.email AS customer_email,
+             COALESCE(
+               json_agg(
+                 json_build_object(
+                   'id', oi.id,
+                   'product_id', oi.product_id,
+                   'variant_id', oi.variant_id,
+                   'name', oi.name,
+                   'quantity', oi.quantity,
+                   'unit_price', oi.unit_price
+                 )
+                 ORDER BY oi.id
+               ) FILTER (WHERE oi.id IS NOT NULL),
+               '[]'::json
+             ) AS items
+      FROM orders o
+      JOIN users u ON u.id = o.user_id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.user_id = $1
+      GROUP BY o.id, u.name, u.email
+      ORDER BY o.created_at DESC
+    `, [req.params.id]);
+    res.json(result.rows.map((order) => ({ ...order, items: order.items || [] })));
   } catch (e) { next(e); }
 });
 r.get("/settings", async (req, res, next) => {

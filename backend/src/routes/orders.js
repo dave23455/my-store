@@ -4,12 +4,33 @@ import { authenticate } from '../middleware/auth.js';
 import { z } from 'zod';
 
 const router = Router();
-const schema = z.object({ items: z.array(z.object({ productId: z.number(), quantity: z.number().int().positive(), variantId: z.number().nullable().optional() })).min(1), shippingAddress: z.object({ name: z.string(), email: z.string().email(), phone: z.string(), country: z.string(), city: z.string(), address: z.string(), postalCode: z.string().optional() }) });
+const schema = z.object({
+  items: z.array(z.object({ productId: z.number(), quantity: z.number().int().positive(), variantId: z.number().nullable().optional() })).min(1),
+  shippingAddress: z.object({
+    name: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional(),
+    phone: z.string().max(50).optional(),
+    country: z.string().min(1).max(100).optional(),
+    city: z.string().min(1).max(100).optional(),
+    address: z.string().min(1).max(300).optional(),
+    postalCode: z.string().max(50).optional(),
+  }).default({}),
+});
 
 router.post('/', authenticate, async (req, res, next) => {
   const client = await pool.connect();
   try {
     const value = schema.parse(req.body);
+    const userProfile = (await client.query('SELECT name,email,phone FROM users WHERE id=$1', [req.user.id])).rows[0] || {};
+    const shippingAddress = {
+      name: value.shippingAddress.name || userProfile.name || 'Customer',
+      email: value.shippingAddress.email || userProfile.email || '',
+      phone: value.shippingAddress.phone || userProfile.phone || '',
+      country: value.shippingAddress.country || '',
+      city: value.shippingAddress.city || '',
+      address: value.shippingAddress.address || '',
+      postalCode: value.shippingAddress.postalCode || '',
+    };
     await client.query('BEGIN');
     let total = 0;
     const items = [];
@@ -27,7 +48,7 @@ router.post('/', authenticate, async (req, res, next) => {
       if (stock < item.quantity) throw Object.assign(new Error('One or more items are unavailable'), { status: 409 });
       total += Number(price) * item.quantity; items.push({ ...item, product, price });
     }
-    const order = (await client.query("INSERT INTO orders(user_id,status,payment_status,subtotal,shipping_cost,total,shipping_address) VALUES($1,'pending_payment','pending',$2,0,$2,$3) RETURNING *", [req.user.id, total, JSON.stringify(value.shippingAddress)])).rows[0];
+    const order = (await client.query("INSERT INTO orders(user_id,status,payment_status,subtotal,shipping_cost,total,shipping_address) VALUES($1,'pending_payment','pending',$2,0,$2,$3) RETURNING *", [req.user.id, total, JSON.stringify(shippingAddress)])).rows[0];
     for (const item of items) {
       await client.query('INSERT INTO order_items(order_id,product_id,variant_id,name,unit_price,quantity) VALUES($1,$2,$3,$4,$5,$6)', [order.id, item.productId, item.variantId || null, item.product.name, item.price, item.quantity]);
       if (item.variantId) await client.query('UPDATE product_variants SET stock=stock-$1 WHERE id=$2', [item.quantity, item.variantId]);

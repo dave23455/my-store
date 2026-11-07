@@ -15,9 +15,20 @@ import payments from './routes/payments.js';
 import { paymentService } from './services/payment.service.js';
 
 const app = express();
-const allowedOrigins = (process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+const defaultAllowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const allowedOrigins = [...new Set([
+  ...defaultAllowedOrigins,
+  ...(process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+])];
 app.use(helmet());
-app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed by CORS')), credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.includes(origin) || /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    return isAllowed ? callback(null, true) : callback(new Error('Origin is not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {

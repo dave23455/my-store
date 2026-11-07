@@ -1,0 +1,18 @@
+$kind: http-request
+name: Add Item to Cart
+method: POST
+url: '{{baseUrl}}/api/cart/items'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "productId": "{{productId}}",
+      "quantity": 1,
+      "sizeId": "{{sizeId}}"
+    }

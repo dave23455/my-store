@@ -1,0 +1,17 @@
+$kind: http-request
+name: Payment Webhook
+method: POST
+url: '{{baseUrl}}/api/payments/webhook'
+order: 4000
+headers:
+  - key: x-paystack-signature
+    value: '{{paystackSignature}}'
+body:
+  type: json
+  content: |-
+    {
+      "event": "charge.success",
+      "data": {
+        "reference": "{{paymentReference}}"
+      }
+    }

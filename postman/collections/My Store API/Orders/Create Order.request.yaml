@@ -1,0 +1,22 @@
+$kind: http-request
+name: Create Order
+method: POST
+url: '{{baseUrl}}/api/orders'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "items": [{ "productId": "{{productId}}", "quantity": 1, "sizeId": "{{sizeId}}" }],
+      "shippingAddress": {
+        "street": "123 Main St",
+        "city": "Lagos",
+        "state": "Lagos",
+        "country": "Nigeria"
+      }
+    }

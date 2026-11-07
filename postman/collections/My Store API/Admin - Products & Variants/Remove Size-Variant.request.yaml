@@ -1,0 +1,10 @@
+$kind: http-request
+name: 'Remove Size/Variant'
+method: DELETE
+url: '{{baseUrl}}/api/admin/products/{{productId}}/sizes/{{sizeId}}'
+order: 6000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

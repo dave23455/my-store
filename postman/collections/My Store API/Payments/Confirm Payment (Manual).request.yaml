@@ -1,0 +1,18 @@
+$kind: http-request
+name: 'Confirm Payment (Manual)'
+method: POST
+url: '{{baseUrl}}/api/payments/confirm'
+order: 3000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "orderId": "{{orderId}}",
+      "reference": "{{paymentReference}}",
+      "proofUrl": "https://example.com/proof.jpg"
+    }

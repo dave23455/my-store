@@ -1,0 +1,16 @@
+$kind: http-request
+name: Post Comment
+method: POST
+url: '{{baseUrl}}/api/products/{{productId}}/comments'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "comment": "Love this!"
+    }

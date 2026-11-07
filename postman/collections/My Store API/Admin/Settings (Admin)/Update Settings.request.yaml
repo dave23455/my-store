@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Settings
+method: PUT
+url: '{{baseUrl}}/api/admin/settings'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "storeName": "My Store",
+      "currency": "NGN"
+    }

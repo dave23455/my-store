@@ -1,0 +1,4 @@
+name: STAGING
+values:
+  - key: baseUrl
+    value: ''

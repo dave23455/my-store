@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get Product Comments
+method: GET
+url: '{{baseUrl}}/api/products/{{productId}}/comments'
+order: 1000

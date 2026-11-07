@@ -622,6 +622,7 @@ function Checkout() {
   const [message, showMessage, clearMessage] = useAutoMessage(),
     [orderId, setOrderId] = useState(""),
     [thankYou, setThankYou] = useState(false),
+    [profile, setProfile] = useState(null),
     [confirmation, setConfirmation] = useState({
       payerName: "",
       amount: "",
@@ -640,6 +641,22 @@ function Checkout() {
     token = localStorage.getItem("token"),
     nav = useNavigate(),
     redirectTimer = useRef();
+  useEffect(() => {
+    if (!token) return;
+    fetch(API + "/auth/me", { headers: { Authorization: "Bearer " + token } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || !data.user) return;
+        setProfile(data.user);
+        setForm((current) => ({
+          ...current,
+          name: current.name || data.user.name || "",
+          email: current.email || data.user.email || "",
+          phone: current.phone || data.user.phone || "",
+        }));
+      })
+      .catch(() => {});
+  }, [token]);
   async function confirmPayment(event) {
     event.preventDefault();
     const response = await fetch(API + "/payments/confirm", {
@@ -682,7 +699,12 @@ function Checkout() {
           variantId: x.variantId || null,
           quantity: x.quantity,
         })),
-        shippingAddress: form,
+        shippingAddress: {
+          ...form,
+          name: form.name || profile?.name || "Customer",
+          email: form.email || profile?.email || "",
+          phone: form.phone || profile?.phone || "",
+        },
       }),
     });
     const d = await r.json();
@@ -703,7 +725,7 @@ function Checkout() {
         return;
       }
       setMessage(
-        "Your order was received. Online payment is not available yet; use the bank-transfer details below.",
+        "Your order was received, but online payment is not available right now. Please contact support for payment help.",
       );
     } else setMessage(d.message);
   }
@@ -715,7 +737,8 @@ function Checkout() {
         {Object.entries(form).map(([k, v]) => (
           <input
             key={k}
-            required={k !== "postalCode"}
+            required={k !== "postalCode" && !(k === "email" || k === "name" || k === "phone")}
+            readOnly={!!profile && (k === "email" || k === "name" || k === "phone")}
             placeholder={k.replace(/([A-Z])/g, " $1")}
             value={v}
             onChange={(e) => setForm({ ...form, [k]: e.target.value })}
@@ -735,65 +758,6 @@ function Checkout() {
           </button>
         </div>
       )}
-      {orderId && (
-        <section className="payment-card">
-          <p className="eyebrow">BANK TRANSFER</p>
-          <h2>Pay for order #{orderId}</h2>
-          <p>
-            Transfer the order total to this account, then contact us on
-            WhatsApp with your order number and payment receipt.
-          </p>
-          <p>
-            <b>Bank:</b> {settings.bank_name}
-          </p>
-          <p>
-            <b>Account number:</b> {settings.bank_account_number}
-          </p>
-          <p>
-            <b>Account name:</b> {settings.bank_account_name}
-          </p>
-          <form className="payment-confirmation" onSubmit={confirmPayment}>
-            <h3>Have you paid?</h3>
-            <p>
-              Send your transfer details for review. Your order will be marked
-              paid after we confirm the transfer.
-            </p>
-            <input
-              required
-              placeholder="Name used for the transfer"
-              value={confirmation.payerName}
-              onChange={(e) =>
-                setConfirmation({ ...confirmation, payerName: e.target.value })
-              }
-            />
-            <input
-              required
-              type="number"
-              min="1"
-              placeholder="Amount paid"
-              value={confirmation.amount}
-              onChange={(e) =>
-                setConfirmation({ ...confirmation, amount: e.target.value })
-              }
-            />
-            <input
-              placeholder="Bank reference (optional)"
-              value={confirmation.reference}
-              onChange={(e) =>
-                setConfirmation({ ...confirmation, reference: e.target.value })
-              }
-            />
-            <textarea
-              placeholder="Note (optional)"
-              value={confirmation.notes}
-              onChange={(e) =>
-                setConfirmation({ ...confirmation, notes: e.target.value })
-              }
-            />
-            <button className="darkbtn">Confirm payment</button>
-          </form>
-        </section>
-      )}{" "}
       {!token && <Link to="/login">Sign in or create an account -&gt;</Link>}
     </main>
   );
@@ -1670,14 +1634,21 @@ function Admin() {
             <h1>Order management</h1>
             <div className="admin-list">
               {orders.map((o) => (
-                <div key={o.id} className="list-row">
+                <div key={o.id} className="list-row order-row" style={{ display: "block" }}>
                   <span>
                     <b>Order #{o.id}</b>
                     <small>
-                      {o.status} | {o.payment_status}
+                      {o.customer_name || o.customer_email || "Customer"} • {o.status} | {o.payment_status}
                     </small>
                   </span>
-                  <strong>{money(o.total)}</strong>
+                  <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+                    {(o.items || []).map((item) => (
+                      <small key={`${o.id}-${item.id || item.name}`}>
+                        • {item.name} × {item.quantity} ({money(Number(item.unit_price) * Number(item.quantity))})
+                      </small>
+                    )) || <small>No items recorded</small>}
+                  </div>
+                  <strong style={{ display: "block", marginTop: 8 }}>{money(o.total)}</strong>
                 </div>
               ))}
             </div>
@@ -1738,7 +1709,7 @@ function Admin() {
                 </div>
               ))}
             </div>
-            {selectedCustomer && <section className="customer-orders panel"><div className="sectionhead"><h2>{selectedCustomer.name}'s orders</h2><button className="link" onClick={() => setSelectedCustomer(null)}>Close</button></div>{customerOrders.length ? customerOrders.map((order) => <div className="list-row" key={order.id}><span><b>Order #{order.id}</b><small>{order.status} | {order.payment_status}</small></span><strong>{money(order.total)}</strong></div>) : <p>No orders found.</p>}</section>}
+            {selectedCustomer && <section className="customer-orders panel"><div className="sectionhead"><h2>{selectedCustomer.name}'s orders</h2><button className="link" onClick={() => setSelectedCustomer(null)}>Close</button></div>{customerOrders.length ? customerOrders.map((order) => <div className="list-row" key={order.id}><span><b>Order #{order.id}</b><small>{order.status} | {order.payment_status}</small></span><div style={{ marginTop: 8, display: "grid", gap: 4 }}>{(order.items || []).map((item) => <small key={`${order.id}-${item.id || item.name}`}>• {item.name} × {item.quantity}</small>)} {!(order.items || []).length && <small>No items recorded</small>}</div><strong>{money(order.total)}</strong></div>) : <p>No orders found.</p>}</section>}
           </>
         )}
         {view === "staff" && (

@@ -1,0 +1,17 @@
+$kind: http-request
+name: 'Add Size/Variant'
+method: POST
+url: '{{baseUrl}}/api/admin/products/{{productId}}/sizes'
+order: 5000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "label": "XL",
+      "stock": 20
+    }

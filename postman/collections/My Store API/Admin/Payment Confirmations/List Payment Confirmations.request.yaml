@@ -1,0 +1,10 @@
+$kind: http-request
+name: List Payment Confirmations
+method: GET
+url: '{{baseUrl}}/api/admin/payment-confirmations'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

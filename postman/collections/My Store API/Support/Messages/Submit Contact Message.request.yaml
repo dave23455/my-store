@@ -1,0 +1,13 @@
+$kind: http-request
+name: Submit Contact Message
+method: POST
+url: '{{baseUrl}}/api/messages'
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "message": "Hello, I need help."
+    }

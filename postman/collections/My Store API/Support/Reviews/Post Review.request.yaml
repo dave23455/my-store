@@ -1,0 +1,17 @@
+$kind: http-request
+name: Post Review
+method: POST
+url: '{{baseUrl}}/api/products/{{productId}}/reviews'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "rating": 5,
+      "comment": "Great product!"
+    }

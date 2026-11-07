@@ -1,0 +1,23 @@
+$kind: http-request
+name: Create Product with Sizes
+method: POST
+url: '{{baseUrl}}/api/admin/products'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Shirt",
+      "description": "Cotton shirt",
+      "price": 3500,
+      "categoryId": "{{categoryId}}",
+      "sizes": [
+        { "label": "M", "stock": 50 },
+        { "label": "L", "stock": 30 }
+      ]
+    }

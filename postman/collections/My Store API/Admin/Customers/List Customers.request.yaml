@@ -1,0 +1,10 @@
+$kind: http-request
+name: List Customers
+method: GET
+url: '{{baseUrl}}/api/admin/customers'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'

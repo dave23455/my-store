@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create Category
+method: POST
+url: '{{baseUrl}}/api/admin/categories'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "New Category",
+      "slug": "new-category"
+    }
