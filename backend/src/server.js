@@ -13,6 +13,14 @@ import admin from './routes/admin.js';
 import adminProducts from './routes/admin-products.js';
 import payments from './routes/payments.js';
 import { paymentService } from './services/payment.service.js';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const swaggerDocument = YAML.load(join(__dirname, 'swagger.yaml'));
 
 const app = express();
 const defaultAllowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
@@ -20,7 +28,7 @@ const allowedOrigins = [...new Set([
   ...defaultAllowedOrigins,
   ...(process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 ])];
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
@@ -39,6 +47,9 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), asy
   } catch { res.sendStatus(400); }
 });
 app.use(express.json({ limit: '1mb' }));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get('/docs', (req, res) => res.redirect('/api-docs'));
+app.get('/api/docs', (req, res) => res.redirect('/api-docs'));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.get('/api/settings', async (req, res, next) => {
   try { const result = await query('SELECT data FROM store_settings WHERE id=1'); res.json(result.rowCount ? result.rows[0].data : {}); }
