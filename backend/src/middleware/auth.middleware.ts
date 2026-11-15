@@ -33,18 +33,27 @@ export const isAuth = async (
 
     const token = authHeader.replace("Bearer ", "").trim();
     const secret = process.env.JWT_SECRET || "default_secret";
-    const payload = jwt.verify(token, secret) as { id: number; role: UserRole };
+    const payload = jwt.verify(token, secret) as {
+      sub?: string;
+      id?: number;
+      role: UserRole;
+    };
 
-    const result = await query(
-      "SELECT id, name, email, role, phone FROM users WHERE id = $1",
-      [payload.id]
-    );
+    const userLookup = payload.sub
+      ? await query(
+          "SELECT id, name, email, role, phone FROM users WHERE public_id = $1",
+          [payload.sub]
+        )
+      : await query(
+          "SELECT id, name, email, role, phone FROM users WHERE id = $1",
+          [payload.id]
+        );
 
-    if (!result.rowCount) {
+    if (!userLookup.rowCount) {
       throw ApiError.unauthorized("User account no longer exists");
     }
 
-    req.user = result.rows[0] as AuthenticatedUser;
+    req.user = userLookup.rows[0] as AuthenticatedUser;
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

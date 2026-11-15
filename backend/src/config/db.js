@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 
@@ -9,8 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const memorySeedSql = `
-  CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,name VARCHAR(100) NOT NULL,email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,role VARCHAR(20) NOT NULL DEFAULT 'customer' CHECK(role IN('customer','employee','admin','owner')),phone VARCHAR(50),created_at TIMESTAMPTZ DEFAULT now());
-  CREATE TABLE IF NOT EXISTS password_reset_tokens(id SERIAL PRIMARY KEY,user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,token_hash TEXT NOT NULL UNIQUE,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT now());
+  CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,public_id UUID NOT NULL UNIQUE,name VARCHAR(100) NOT NULL,email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,role VARCHAR(20) NOT NULL DEFAULT 'customer' CHECK(role IN('customer','employee','admin','owner')),phone VARCHAR(50),email_verified BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ DEFAULT now());
+  CREATE TABLE IF NOT EXISTS password_reset_otps(id SERIAL PRIMARY KEY,user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,otp_hash TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL,attempts INT NOT NULL DEFAULT 0 CHECK(attempts>=0),created_at TIMESTAMPTZ DEFAULT now());
+  CREATE TABLE IF NOT EXISTS email_verification_otps(id SERIAL PRIMARY KEY,user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,otp_hash TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL,attempts INT NOT NULL DEFAULT 0 CHECK(attempts>=0),created_at TIMESTAMPTZ DEFAULT now());
   CREATE TABLE IF NOT EXISTS store_settings(id SMALLINT PRIMARY KEY DEFAULT 1 CHECK(id=1),data JSONB NOT NULL DEFAULT '{}'::jsonb,updated_at TIMESTAMPTZ DEFAULT now());
   CREATE TABLE IF NOT EXISTS categories(id SERIAL PRIMARY KEY,name VARCHAR(100) UNIQUE NOT NULL,slug VARCHAR(120) UNIQUE NOT NULL,active BOOLEAN DEFAULT true,created_at TIMESTAMPTZ DEFAULT now());
   CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY,category_id INT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,name VARCHAR(255) NOT NULL,description TEXT NOT NULL DEFAULT '',price NUMERIC(12,2) NOT NULL CHECK(price>=0),discount_price NUMERIC(12,2) CHECK(discount_price>=0),stock INT NOT NULL DEFAULT 0 CHECK(stock>=0),sku VARCHAR(100) UNIQUE NOT NULL,brand VARCHAR(100),featured BOOLEAN DEFAULT false,new_arrival BOOLEAN DEFAULT false,best_seller BOOLEAN DEFAULT false,active BOOLEAN DEFAULT true,rating NUMERIC(2,1) DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now());
@@ -69,8 +71,8 @@ async function initMemoryDatabase(pool) {
   if (!existing.rowCount) {
     const passwordHash = await bcrypt.hash(ownerPassword, 12);
     await pool.query(
-      'INSERT INTO users(name, email, password_hash, role) VALUES($1, $2, $3, $4)',
-      [ownerName, ownerEmail, passwordHash, 'owner'],
+      'INSERT INTO users(name, email, password_hash, role, public_id) VALUES($1, $2, $3, $4, $5)',
+      [ownerName, ownerEmail, passwordHash, 'owner', randomUUID()],
     );
   } else {
     await pool.query(
@@ -81,19 +83,23 @@ async function initMemoryDatabase(pool) {
 }
 
 let pool;
+let usingMemoryFallback = false;
 
 async function createPool() {
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) {
-    const pgPool = new pg.Pool({ connectionString });
-    try {
-      await pgPool.query('SELECT 1');
-      return pgPool;
-    } catch {
-      await pgPool.end().catch(() => {});
+    for (const ssl of [undefined, true]) {
+      const pgPool = new pg.Pool({ connectionString, ssl });
+      try {
+        await pgPool.query('SELECT 1');
+        return pgPool;
+      } catch {
+        await pgPool.end().catch(() => {});
+      }
     }
   }
 
+  usingMemoryFallback = true;
   const { newDb } = await import('pg-mem');
   const memoryDb = newDb();
   const adapter = memoryDb.adapters.createPg();
@@ -104,4 +110,4 @@ async function createPool() {
 
 pool = await createPool();
 export const query = (text, params) => pool.query(text, params);
-export { pool };
+export { pool, usingMemoryFallback as isMemoryDatabase };

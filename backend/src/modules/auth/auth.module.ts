@@ -7,9 +7,8 @@ import {
   RegisterSchema,
   LoginSchema,
   UpdateProfileSchema,
-  ForgotPasswordSchema,
-  ResetPasswordSchema,
 } from "./dto/auth.dto.js";
+import otpRouter from "../otp/otp.module.js";
 
 const ctrl = new AuthController();
 const authRouter = Router();
@@ -35,17 +34,7 @@ authRouter.patch(
   asyncHandler(ctrl.updateMe)
 );
 
-authRouter.post(
-  "/forgot-password",
-  validateBody(ForgotPasswordSchema),
-  asyncHandler(ctrl.forgotPassword)
-);
-
-authRouter.post(
-  "/reset-password",
-  validateBody(ResetPasswordSchema),
-  asyncHandler(ctrl.resetPassword)
-);
+authRouter.use(otpRouter);
 
 authRouter.post("/logout", asyncHandler(ctrl.logout));
 

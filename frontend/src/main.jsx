@@ -1,10 +1,12 @@
-﻿function AccountDetails() {
+function AccountDetails() {
   const [user, setUser] = useState(),
     [orders, setOrders] = useState([]),
     [displayName, setDisplayName] = useState(""),
     [nameMessage, setNameMessage] = useState(""),
     [accountError, setAccountError] = useState(""),
+    [activeTab, setActiveTab] = useState("orders"),
     nav = useNavigate();
+
   useEffect(() => {
     const t = localStorage.getItem("token");
     if (!t) {
@@ -24,99 +26,231 @@
         }
         const userData = await u.json();
         setUser(userData.user);
+        setDisplayName(userData.user.name || "");
         setOrders(o.ok ? await o.json() : []);
       })
       .catch(() => setAccountError("We could not connect to your account. Please start the store API and try again."));
   }, [nav]);
+
   async function saveDisplayName(event) {
     event.preventDefault();
-    const response = await fetch(API + "/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer " + localStorage.getItem("token") }, body: JSON.stringify({ name: displayName }) });
+    const response = await fetch(API + "/auth/me", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: JSON.stringify({ name: displayName }),
+    });
     const data = await response.json();
-    if (response.ok) { setUser(data.user); setDisplayName(data.user.name); setNameMessage("Name updated successfully."); }
-    else setNameMessage(data.message || "Could not update your name.");
+    if (response.ok) {
+      setUser(data.user);
+      setDisplayName(data.user.name);
+      setNameMessage("Profile name updated successfully.");
+    } else {
+      setNameMessage(data.message || "Could not update your name.");
+    }
   }
+
   function logout() {
     localStorage.removeItem("token");
+    localStorage.removeItem("store-cart");
+    setCart([]);
+    window.dispatchEvent(new Event("store-auth-changed"));
     nav("/login");
   }
+
   async function cancelOrder(orderId) {
-    if (!window.confirm("Cancel this unpaid order?")) return;
+    if (!window.confirm("Are you sure you want to cancel this unpaid order?")) return;
     const response = await fetch(API + "/orders/" + orderId + "/cancel", {
       method: "PATCH",
       headers: { Authorization: "Bearer " + localStorage.getItem("token") },
     });
     const data = await response.json();
-    if (response.ok)
+    if (response.ok) {
       setOrders((items) =>
         items.map((order) =>
           order.id === orderId ? { ...order, status: "cancelled" } : order,
         ),
       );
-    else alert(data.message || "This order cannot be cancelled.");
+    } else {
+      alert(data.message || "This order cannot be cancelled.");
+    }
   }
-  if (accountError)
+
+  if (accountError) {
     return (
-      <main className="page">
-        <h1>Account unavailable</h1>
-        <p>{accountError}</p>
-        <button className="darkbtn" onClick={() => window.location.reload()}>
-          Try again
-        </button>
+      <main className="page account-page">
+        <div className="account-empty-card">
+          <h1>Account unavailable</h1>
+          <p>{accountError}</p>
+          <button className="darkbtn" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
       </main>
     );
-  if (!user) return <main className="page">Loading your account...</main>;
+  }
+
+  if (!user) {
+    return (
+      <main className="page account-page">
+        <div className="account-loading-card">
+          <p>Loading your boutique account...</p>
+        </div>
+      </main>
+    );
+  }
+
+  const roleBadge = user.role === "owner" ? "Store Owner" : user.role === "admin" ? "Admin" : "Customer";
+
   return (
     <main className="page account-page">
-      <div className="account-header">
-        <div>
-          <p className="eyebrow">YOUR ACCOUNT</p>
-          <h1>Welcome, {user.name}</h1>
+      {/* Account Top Banner */}
+      <div className="account-hero-bar">
+        <div className="account-avatar-summary">
+          <div className="account-avatar-circle">
+            {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+          </div>
+          <div>
+            <div className="account-eyebrow-line">
+              <span className="eyebrow">CLIENT SUITE</span>
+              <span className="account-role-badge">{roleBadge}</span>
+            </div>
+            <h1>Welcome back, {user.name}</h1>
+            <p className="account-email-sub">{user.email}</p>
+          </div>
         </div>
-        <button className="link" onClick={logout}>
-          Log out
+        <div className="account-actions-bar">
+          {['admin', 'owner'].includes(user.role) && (
+            <Link className="secondary-btn admin-btn" to="/admin">
+              Store Dashboard →
+            </Link>
+          )}
+          <button className="account-logout-btn" onClick={logout}>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      {/* Account Navigation Tabs */}
+      <div className="account-nav-tabs">
+        <button
+          className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
+          onClick={() => setActiveTab("orders")}
+        >
+          My Orders ({orders.length})
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "profile" ? "active" : ""}`}
+          onClick={() => setActiveTab("profile")}
+        >
+          Profile Details
         </button>
       </div>
-      <section className="account-card">
-        <h2>Your details</h2>
-        <p>
-          <b>Name:</b> {user.name}
-        </p>
-        <p>
-          <b>Email:</b> {user.email}
-        </p>
-        <p>
-          <b>Account type:</b> {user.role === "owner" ? "Owner" : user.role === "admin" ? "Admin" : "Customer"}
-        </p>
-        <form className="name-form" onSubmit={saveDisplayName}>
-          <label>Display name<input required minLength="2" maxLength="100" value={displayName || user.name} onChange={(event) => setDisplayName(event.target.value)} /></label>
-          <button className="darkbtn">Save name</button>
-          {nameMessage && <small>{nameMessage} <button type="button" className="link" onClick={() => setNameMessage("")} style={{fontSize: '0.8em'}}>✕</button></small>}
-        </form>
-        {['admin', 'owner'].includes(user.role) && (
-          <Link className="darkbtn" to="/admin">
-            Open product catalog
-          </Link>
-        )}
-      </section>
-      <h2>Order history</h2>
-      {orders.length ? (
-        orders.map((o) => (
-          <div className="account-order" key={o.id}>
-            <span>
-              Order #{o.id} - {o.status} - {money(o.total)}
-            </span>
-            {o.status === "pending_payment" &&
-              o.payment_status === "pending" && (
-                <button className="link" onClick={() => cancelOrder(o.id)}>
-                  Cancel order
-                </button>
-              )}
-          </div>
-        ))
-      ) : (
-        <p>No orders yet.</p>
+
+      {/* Tab 1: Orders */}
+      {activeTab === "orders" && (
+        <section className="account-section">
+          {orders.length ? (
+            <div className="orders-grid">
+              {orders.map((o) => (
+                <div className="order-modern-card" key={o.id}>
+                  <div className="order-card-header">
+                    <div>
+                      <span className="order-number">Order #{o.id}</span>
+                      <small className="order-date">
+                        {o.created_at ? new Date(o.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Recent"}
+                      </small>
+                    </div>
+                    <span className={`status-pill status-${o.status}`}>
+                      {o.status.replace("_", " ")}
+                    </span>
+                  </div>
+
+                  <div className="order-card-body">
+                    <div className="order-meta-item">
+                      <span>Total Amount:</span>
+                      <strong>{money(o.total)}</strong>
+                    </div>
+                    <div className="order-meta-item">
+                      <span>Payment Status:</span>
+                      <span className="payment-status-label">{o.payment_status || "Pending"}</span>
+                    </div>
+                  </div>
+
+                  <div className="order-card-footer">
+                    {o.status === "pending_payment" && o.payment_status === "pending" && (
+                      <button className="cancel-order-btn" onClick={() => cancelOrder(o.id)}>
+                        Cancel Unpaid Order
+                      </button>
+                    )}
+                    <Link className="reorder-link" to="/shop">
+                      Shop Again →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="account-empty-card">
+              <span className="empty-icon">🛍</span>
+              <h3>No purchases yet</h3>
+              <p>Your order history will appear here once you make your first beauty purchase.</p>
+              <Link className="darkbtn" to="/shop">
+                Explore The Shop →
+              </Link>
+            </div>
+          )}
+        </section>
       )}
-      <Link to="/shop">Continue shopping -&gt;</Link>
+
+      {/* Tab 2: Profile Settings */}
+      {activeTab === "profile" && (
+        <section className="account-section">
+          <div className="profile-edit-card">
+            <h3>Personal Information</h3>
+            <p className="profile-edit-desc">Manage how your name displays across your orders and receipts.</p>
+
+            {nameMessage && (
+              <div className="account-alert" role="alert">
+                <span>{nameMessage}</span>
+                <button type="button" className="close-btn" onClick={() => setNameMessage("")}>×</button>
+              </div>
+            )}
+
+            <form className="modern-profile-form" onSubmit={saveDisplayName}>
+              <div className="form-field">
+                <label htmlFor="account-display-name">Display Name</label>
+                <input
+                  id="account-display-name"
+                  required
+                  minLength="2"
+                  maxLength="100"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="Your Name"
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Registered Email Address</label>
+                <input disabled value={user.email} />
+                <small className="field-hint">Email is linked to your customer ID and cannot be changed.</small>
+              </div>
+
+              <div className="form-field">
+                <label>Membership Role</label>
+                <input disabled value={roleBadge} />
+              </div>
+
+              <button className="darkbtn profile-save-btn">
+                Update Profile
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
@@ -142,6 +276,7 @@ import "./styles.css";
 const API =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? "/api" : "http://localhost:4000/api");
+const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 const useAutoMessage = (initialValue = "") => {
   const [message, setMessage] = useState(initialValue);
   const timeoutRef = useRef(null);
@@ -189,6 +324,16 @@ const compactMoney = (n) =>
     maximumFractionDigits: 2,
   }).format(n);
 const cleanWhatsApp = (v) => String(v || "").replace(/\D/g, "");
+const cartItemKey = (item) =>
+  `${item.product_id ?? item.id}:${item.variant_id ?? item.variantId ?? "base"}`;
+const mapServerCart = (items) =>
+  items.map((item) => ({
+    ...item,
+    id: item.product_id,
+    variantId: item.variant_id ?? null,
+    cartItemId: item.id,
+    cartKey: cartItemKey(item),
+  }));
 function useCart() {
   return useContext(Cart);
 }
@@ -205,14 +350,25 @@ function Brand() {
   );
 }
 function Header() {
-  const { cart } = useCart();
+  const { cart, clear } = useCart();
   const settings = useStore();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const nav = useNavigate();
   const wa = cleanWhatsApp(settings.whatsapp_number);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     setIsLoggedIn(!!token);
@@ -225,27 +381,34 @@ function Header() {
       .then((data) => setIsAdmin(['admin', 'owner'].includes(data?.user?.role)))
       .catch(() => setIsAdmin(false));
   }, [location.pathname]);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("store-cart");
+    clear();
     setIsLoggedIn(false);
     setIsAdmin(false);
+    window.dispatchEvent(new Event("store-auth-changed"));
     nav("/login");
   };
+
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  const cartCount = cart.reduce((n, x) => n + x.quantity, 0);
+
   return (
-    <>
+    <div className={`header-wrapper ${scrolled ? "scrolled" : ""}`}>
       <div className="notice">
-        {settings.shipping_message || "We ship worldwide"} | Secure checkout |
-        Made for your glow
+        {settings.shipping_message || "We ship worldwide"} | Secure checkout | Made for your glow
       </div>
-      <header>
+      <header className={`navbar ${scrolled ? "scrolled" : ""}`}>
         <Link className="logo" to="/">
           <Brand />
         </Link>
         <button
-          className="menu-toggle"
+          className={`menu-toggle ${menuOpen ? "open" : ""}`}
           aria-label="Open menu"
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen(!menuOpen)}
@@ -286,11 +449,12 @@ function Header() {
             <span className="cart-icon" aria-hidden="true">
               🛒
             </span>
-            <span>Cart</span> <b>{cart.reduce((n, x) => n + x.quantity, 0)}</b>
+            <span>Cart</span>
+            {cartCount > 0 && <b>{cartCount}</b>}
           </Link>
         </nav>
       </header>
-    </>
+    </div>
   );
 }
 function ProductCard({ p }) {
@@ -322,8 +486,8 @@ function Home() {
   return (
     <>
       <section className="hero">
-        <div>
-          <p>YOUR EVERYDAY LUXURY</p>
+        <div className="hero-content">
+          <p className="hero-eyebrow">YOUR EVERYDAY LUXURY</p>
           <h1>
             Beauty that
             <br />
@@ -332,23 +496,65 @@ function Home() {
           <p className="lead">
             {settings.tag_line || "Premium beauty, delivered worldwide."}
           </p>
-          <Link className="darkbtn" to="/shop">
-            Shop new arrivals -&gt;
-          </Link>
+          <div className="hero-actions">
+            <Link className="darkbtn hero-btn" to="/shop">
+              Shop new arrivals <span>→</span>
+            </Link>
+          </div>
         </div>
-        <div className="orb">
-          <img
-            src={settings.logo_url || "/lina-styled-you-logo.jpeg"}
-            alt="LinaStyledYou logo"
-          />
+        <div className="hero-visual">
+          <div className="orb">
+            <img
+              src={settings.logo_url || "/lina-styled-you-logo.jpeg"}
+              alt="LinaStyledYou logo"
+            />
+          </div>
         </div>
       </section>
+      {/* Trust & Value Bar */}
+      <section className="value-bar">
+        <div className="value-item">
+          <span className="value-icon">✨</span>
+          <div>
+            <strong>100% Authentic Quality</strong>
+            <small>Handpicked luxury beauty</small>
+          </div>
+        </div>
+        <div className="value-item">
+          <span className="value-icon">📦</span>
+          <div>
+            <strong>Worldwide Delivery</strong>
+            <small>Fast, insured shipping</small>
+          </div>
+        </div>
+        <div className="value-item">
+          <span className="value-icon">🔒</span>
+          <div>
+            <strong>Secure Payments</strong>
+            <small>Protected online checkout</small>
+          </div>
+        </div>
+        <div className="value-item">
+          <span className="value-icon">💬</span>
+          <div>
+            <strong>Dedicated Concierge</strong>
+            <small>Direct WhatsApp support</small>
+          </div>
+        </div>
+      </section>
+
       <section className="intro">
-        <p>ONE STORE. A WORLD OF POSSIBILITY.</p>
+        <p className="eyebrow">ONE STORE. A WORLD OF POSSIBILITY.</p>
         <h2>
           {settings.tag_line || "Curated pieces for your most confident self."}
         </h2>
+        <div className="intro-divider">
+          <span className="divider-line" />
+          <span className="divider-sparkle">✦</span>
+          <span className="divider-line" />
+        </div>
       </section>
+
       <section className="collection">
         <div className="sectionhead">
           <h2>Featured edits</h2>
@@ -360,16 +566,24 @@ function Home() {
           ))}
         </div>
       </section>
-      <section className="shipping">
-        <span>*</span>
-        <div>
-          <h2>{settings.shipping_message || "Worldwide delivery"}</h2>
+
+      {/* Brand Experience & Delivery Showcase */}
+      <section className="shipping-banner">
+        <div className="shipping-inner">
+          <div className="shipping-badge">EXCLUSIVE EXPERIENCE</div>
+          <h2>{settings.shipping_message || "Worldwide luxury delivery"}</h2>
           <p>
-            Wherever your next chapter takes you, we will help you arrive
-            beautifully.
+            Wherever your next chapter takes you, we ensure every curated piece arrives securely and impeccably packaged.
           </p>
+          <div className="shipping-actions">
+            <Link className="darkbtn" to="/shop">
+              Explore the collection <span>→</span>
+            </Link>
+            <Link className="secondary-btn" to="/contact">
+              Ask a question
+            </Link>
+          </div>
         </div>
-        <Link to="/shop">Explore the collection -&gt;</Link>
       </section>
     </>
   );
@@ -466,7 +680,7 @@ function Product() {
     } else showReviewMessage(data.message || "Could not save your rating.");
   }
   if (!p) return <main className="page">Loading product...</main>;
-  const chosen = p.variants?.find((v) => v.id === Number(choice));
+  const chosen = p.variants?.find((v) => v.id === choice);
   const item = {
     ...p,
     price: chosen?.price || p.price,
@@ -567,15 +781,25 @@ function Product() {
   );
 }
 function CartPage() {
-  const { cart, remove, change } = useCart(),
+  const { cart, remove, change, cartError, retrySync } = useCart(),
     nav = useNavigate();
   const total = cart.reduce(
-    (n, x) => n + (x.discount_price || x.price) * x.quantity,
+    (n, x) => n + (x.available === false ? 0 : (x.discount_price || x.price) * x.quantity),
     0,
+  );
+  const unavailableItems = cart.filter((item) => item.available === false);
+  const overstockedItems = cart.filter(
+    (item) => item.available !== false && item.quantity > item.stock,
   );
   return (
     <main className="page cart">
       <h1>Your bag</h1>
+      {cartError && (
+        <p role="alert">
+          {cartError}{" "}
+          <button className="link" onClick={retrySync}>Retry</button>
+        </p>
+      )}
       {!cart.length ? (
         <p>
           Your bag is waiting for something beautiful.{" "}
@@ -585,18 +809,29 @@ function CartPage() {
         <>
           <div>
             {cart.map((x) => (
-              <div className="cartrow" key={x.id}>
+              <div className="cartrow" key={x.cartKey || cartItemKey(x)}>
                 <img src={x.image} />
                 <div>
                   <h3>{x.name}</h3>
+                  {x.variant_name && <p>{x.variant_name}</p>}
                   <strong>{money(x.discount_price || x.price)}</strong>
                   <p>
-                    <button onClick={() => change(x.id, -1)}>-</button>{" "}
+                    <button
+                      disabled={x.available === false}
+                      onClick={() => change(x.cartKey || cartItemKey(x), -1)}
+                    >-</button>{" "}
                     {x.quantity}{" "}
-                    <button onClick={() => change(x.id, 1)}>+</button>
+                    <button
+                      disabled={x.available === false || x.quantity >= x.stock}
+                      onClick={() => change(x.cartKey || cartItemKey(x), 1)}
+                    >+</button>
                   </p>
+                  {x.available === false && <p>This item is no longer available. Remove it to continue.</p>}
+                  {x.available !== false && x.quantity > x.stock && (
+                    <p>Only {x.stock} available. Reduce the quantity to continue.</p>
+                  )}
                 </div>
-                <button className="link" onClick={() => remove(x.id)}>
+                <button className="link" onClick={() => remove(x.cartKey || cartItemKey(x))}>
                   Remove
                 </button>
               </div>
@@ -606,8 +841,15 @@ function CartPage() {
             <p>
               Subtotal <strong>{money(total)}</strong>
             </p>
+            {(unavailableItems.length > 0 || overstockedItems.length > 0) && (
+              <p role="alert">Update or remove unavailable items before checkout.</p>
+            )}
             <p>Shipping calculated at checkout</p>
-            <button className="darkbtn" onClick={() => nav("/checkout")}>
+            <button
+              className="darkbtn"
+              disabled={unavailableItems.length > 0 || overstockedItems.length > 0}
+              onClick={() => nav("/checkout")}
+            >
               Checkout -&gt;
             </button>
           </aside>
@@ -621,6 +863,8 @@ function Checkout() {
   const settings = useStore();
   const [message, showMessage, clearMessage] = useAutoMessage(),
     [orderId, setOrderId] = useState(""),
+    [onlineOrderId, setOnlineOrderId] = useState(""),
+    [submitting, setSubmitting] = useState(false),
     [thankYou, setThankYou] = useState(false),
     [profile, setProfile] = useState(null),
     [confirmation, setConfirmation] = useState({
@@ -666,7 +910,7 @@ function Checkout() {
         Authorization: "Bearer " + token,
       },
       body: JSON.stringify({
-        orderId: Number(orderId),
+        orderId,
         payerName: confirmation.payerName,
         amount: Number(confirmation.amount),
         reference: confirmation.reference || undefined,
@@ -684,50 +928,142 @@ function Checkout() {
     clearTimeout(redirectTimer.current);
     setThankYou(false);
   }
-  async function submit(e) {
-    e.preventDefault();
-    if (!token) return setMessage("Please sign in before placing your order.");
-    const r = await fetch(API + "/orders", {
+  async function startOnlinePayment(targetOrderId) {
+    if (!PAYSTACK_PUBLIC_KEY || !PAYSTACK_PUBLIC_KEY.startsWith("pk_test_")) {
+      showMessage("Set a Paystack test public key in frontend/.env.local before testing payments.", 8000);
+      return;
+    }
+    if (!window.PaystackPop) {
+      showMessage("Paystack checkout did not load. Check your connection and reload the page.", 8000);
+      return;
+    }
+
+    const response = await fetch(API + "/payments/initialize", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + token,
       },
-      body: JSON.stringify({
-        items: cart.map((x) => ({
-          productId: x.id,
-          variantId: x.variantId || null,
-          quantity: x.quantity,
-        })),
-        shippingAddress: {
-          ...form,
-          name: form.name || profile?.name || "Customer",
-          email: form.email || profile?.email || "",
-          phone: form.phone || profile?.phone || "",
-        },
-      }),
+      body: JSON.stringify({ orderId: targetOrderId }),
     });
-    const d = await r.json();
-    if (r.ok) {
-      setOrderId(d.id);
-      clear();
-      const payment = await fetch(API + "/payments/initialize", {
+    const details = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      showMessage(details.message || "Could not start the payment.");
+      return;
+    }
+
+    const cancelAttempt = async () => {
+      const cancellation = await fetch(
+        API + "/payments/" + encodeURIComponent(details.reference) + "/cancel",
+        { method: "POST", headers: { Authorization: "Bearer " + token } },
+      );
+      if (!cancellation.ok) {
+        const error = await cancellation.json().catch(() => ({}));
+        throw new Error(error.message || "Could not close the payment attempt.");
+      }
+    };
+    try {
+      const popup = new window.PaystackPop();
+      popup.newTransaction({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: profile?.email || form.email,
+        amount: details.amount,
+        currency: details.currency,
+        reference: details.reference,
+        metadata: { order_id: targetOrderId },
+        onSuccess: async (transaction) => {
+          if (transaction.reference !== details.reference) {
+            showMessage("Paystack returned a different payment reference. Please contact support.", 8000);
+            return;
+          }
+          try {
+            const verification = await fetch(
+              API + "/payments/" + encodeURIComponent(transaction.reference) + "/verify",
+              { headers: { Authorization: "Bearer " + token } },
+            );
+            const result = await verification.json().catch(() => ({}));
+            if (!verification.ok || !result.paid) {
+              showMessage(result.message || "Payment is not confirmed yet. Check your orders shortly.", 8000);
+              return;
+            }
+            setOnlineOrderId("");
+            showMessage("Payment confirmed. Your order is paid.", 5000);
+            redirectTimer.current = setTimeout(() => nav("/account"), 1800);
+          } catch {
+            showMessage("Payment was submitted, but we could not verify it right now. Check your orders shortly.", 8000);
+          }
+        },
+        onCancel: async () => {
+          try {
+            await cancelAttempt();
+            showMessage("Payment was cancelled. You can retry payment for this order.");
+          } catch (error) {
+            showMessage(error.message || "Payment was closed, but the attempt could not be updated.", 8000);
+          }
+        },
+        onError: async (error) => {
+          try {
+            await cancelAttempt();
+          } catch {
+            showMessage("Payment could not start and its attempt could not be closed. Please contact support.", 8000);
+            return;
+          }
+          showMessage(error.message || "Paystack could not start the payment. You can retry.", 8000);
+        },
+      });
+    } catch (error) {
+      try {
+        await cancelAttempt();
+      } catch {
+        showMessage("Payment could not start and its attempt could not be closed. Please contact support.", 8000);
+        return;
+      }
+      showMessage(error.message || "Paystack checkout could not be opened.", 8000);
+    }
+  }
+  async function submit(e) {
+    e.preventDefault();
+    if (!token) return showMessage("Please sign in before placing an order.");
+    if (!PAYSTACK_PUBLIC_KEY || !PAYSTACK_PUBLIC_KEY.startsWith("pk_test_")) {
+      return showMessage("Set a Paystack test public key in frontend/.env.local before testing payments.", 8000);
+    }
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const response = await fetch(API + "/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify({ orderId: d.id }),
+        body: JSON.stringify({
+          items: cart.map((item) => ({
+            productId: item.id,
+            variantId: item.variantId || null,
+            quantity: item.quantity,
+          })),
+          shippingAddress: {
+            ...form,
+            name: form.name || profile?.name || "Customer",
+            email: form.email || profile?.email || "",
+            phone: form.phone || profile?.phone || "",
+          },
+        }),
       });
-      const details = await payment.json();
-      if (payment.ok && details.authorizationUrl) {
-        window.location.assign(details.authorizationUrl);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showMessage(result.message || "Could not place your order.");
         return;
       }
-      setMessage(
-        "Your order was received, but online payment is not available right now. Please contact support for payment help.",
-      );
-    } else setMessage(d.message);
+      setOrderId(result.id);
+      setOnlineOrderId(result.id);
+      clear();
+      await startOnlinePayment(result.id);
+    } catch {
+      showMessage("We could not reach the store. Please check your connection and try again.", 8000);
+    } finally {
+      setSubmitting(false);
+    }
   }
   return (
     <main className="page checkout">
@@ -744,10 +1080,20 @@ function Checkout() {
             onChange={(e) => setForm({ ...form, [k]: e.target.value })}
           />
         ))}
-        <button className="darkbtn" disabled={!cart.length}>
-          Place order & pay
+        <button className="darkbtn" disabled={!cart.length || submitting}>
+          {submitting ? "Preparing secure checkout..." : "Place order & pay"}
         </button>
       </form>
+      {onlineOrderId && (
+        <button
+          className="darkbtn"
+          type="button"
+          disabled={submitting}
+          onClick={() => startOnlinePayment(onlineOrderId)}
+        >
+          Retry payment
+        </button>
+      )}
       {message && <p>{message} <button type="button" className="link" onClick={clearMessage} style={{fontSize: '0.8em', marginLeft: '0.5em'}}>×</button></p>}
       {thankYou && (
         <div className="payment-thankyou">
@@ -764,7 +1110,7 @@ function Checkout() {
 }
 function Login() {
   const [name, setName] = useState(""),
-    [email, setEmail] = useState(""),
+    [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get("email") || ""),
     [password, setPassword] = useState(""),
     [register, setRegister] = useState(false),
     [msg, showMsg, clearMsg] = useAutoMessage(),
@@ -784,10 +1130,19 @@ function Login() {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
+        if (register && d.details?.userId) {
+          nav(`/verify-email?userId=${encodeURIComponent(d.details.userId)}&email=${encodeURIComponent(email.trim())}`);
+        }
         showMsg(d.message || (register ? "Could not create your account." : "Could not sign you in."));
         return;
       }
+      if (register) {
+        showMsg(d.message || "Check your email for the verification code.");
+        nav(`/verify-email?userId=${encodeURIComponent(d.userId)}&email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
       localStorage.setItem("token", d.token);
+      window.dispatchEvent(new Event("store-auth-changed"));
       setAccountType(d.user.role === "owner" ? "owner" : d.user.role === "admin" ? "admin" : "customer");
       nav("/account");
     } catch {
@@ -808,7 +1163,7 @@ function Login() {
       <h1>{register ? "Welcome" : "Welcome back"}</h1>
       <p>
         {register
-          ? "Create a customer account to track orders, review purchases, and check out faster."
+          ? "Create a customer account. Check your email to verify it before signing in."
           : "Your account permissions are determined securely by your email and password."}
       </p>
       <form onSubmit={submit}>
@@ -856,6 +1211,62 @@ function Login() {
     </main>
   );
 }
+function VerifyEmail() {
+  const params = new URLSearchParams(window.location.search);
+  const [userId, setUserId] = useState(params.get("userId") || "");
+  const [email] = useState(params.get("email") || "");
+  const [otp, setOtp] = useState("");
+  const [message, showMessage, clearMessage] = useAutoMessage();
+  const [verified, setVerified] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    const response = await fetch(API + "/auth/verifyemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, otp }),
+    });
+    const data = await response.json().catch(() => ({}));
+    showMessage(data.message || (response.ok ? "Email verified." : "Could not verify this code."));
+    if (response.ok) setVerified(true);
+  }
+
+  async function resend() {
+    const response = await fetch(API + "/auth/resendverification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    showMessage(data.message || (response.ok ? "If verification is needed, a new code was sent." : "Could not resend the code."));
+  }
+
+  return (
+    <main className="page auth">
+      <h1>Verify your email</h1>
+      <p>Enter the six-digit code sent to {email || "your email address"} to activate your account.</p>
+      <form onSubmit={submit}>
+        <input
+          required
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{6}"
+          maxLength="6"
+          placeholder="6-digit verification code"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+        <button className="darkbtn">Verify email</button>
+      </form>
+      <button className="link" type="button" onClick={resend} disabled={!userId}>
+        Resend verification code
+      </button>
+      {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
+      {verified && <Link to={`/login?email=${encodeURIComponent(email)}`}>Continue to sign in</Link>}
+      {!userId && <p>Your verification link is missing its account ID. Register again or contact support.</p>}
+    </main>
+  );
+}
 function ForgotPassword() {
   const [email, setEmail] = useState(""),
     [message, showMessage, clearMessage] = useAutoMessage();
@@ -872,7 +1283,7 @@ function ForgotPassword() {
   return (
     <main className="page auth">
       <h1>Reset your password</h1>
-      <p>Enter your email and we will send a secure reset link.</p>
+      <p>Enter your email to generate a one-time code. During development, the code appears in the API server terminal; email delivery is not enabled yet.</p>
       <form onSubmit={submit}>
         <input
           required
@@ -881,25 +1292,26 @@ function ForgotPassword() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <button className="darkbtn">Send reset link</button>
+        <button className="darkbtn">Generate reset code</button>
       </form>
       {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
+      <Link to={`/reset-password?email=${encodeURIComponent(email)}`}>Enter your reset code</Link>
       <Link to="/login">Back to sign in</Link>
     </main>
   );
 }
 function ResetPassword() {
-  const [password, setPassword] = useState(""),
+  const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get("email") || ""),
+    [otp, setOtp] = useState(""),
+    [password, setPassword] = useState(""),
     [message, showMessage, clearMessage] = useAutoMessage(),
     nav = useNavigate();
   async function submit(e) {
     e.preventDefault();
-    const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return showMessage("This reset link is invalid.");
     const r = await fetch(API + "/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
+      body: JSON.stringify({ email, otp, password }),
     });
     const d = await r.json();
     showMessage(d.message);
@@ -909,6 +1321,22 @@ function ResetPassword() {
     <main className="page auth">
       <h1>Choose a new password</h1>
       <form onSubmit={submit}>
+        <input
+          required
+          type="email"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          required
+          inputMode="numeric"
+          pattern="[0-9]{6}"
+          maxLength="6"
+          placeholder="6-digit reset code"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
         <input
           required
           minLength="8"
@@ -989,71 +1417,168 @@ function Contact() {
   const [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [body, setBody] = useState(""),
+    [loading, setLoading] = useState(false),
     [message, showMessage, clearMessage] = useAutoMessage();
   const settings = useStore();
+  const wa = cleanWhatsApp(settings.whatsapp_number);
+
   async function submit(e) {
     e.preventDefault();
-    const r = await fetch(API + "/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, body }),
-    });
-    showMessage(
-      r.ok
-        ? "Thank you. Your message has been sent successfully."
-        : (await r.json()).message,
-    );
-    if (r.ok) {
-      setName("");
-      setEmail("");
-      setBody("");
+    setLoading(true);
+    try {
+      const r = await fetch(API + "/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, body }),
+      });
+      const data = await r.json().catch(() => ({}));
+      showMessage(
+        r.ok
+          ? "Thank you. Your message has been sent successfully."
+          : (data.message || "Could not send your message.")
+      );
+      if (r.ok) {
+        setName("");
+        setEmail("");
+        setBody("");
+      }
+    } catch {
+      showMessage("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
+
   return (
     <main className="page contact-page">
-      <p className="eyebrow">LET'S CONNECT</p>
-      <h1>We are here to help.</h1>
-      <p>
-        Have a question about an item, delivery, or your order? Send us a
-        message and our team will get back to you as soon as possible.
-      </p>
-      <div className="contact-grid">
-        <div className="contact-card">
-          <h3>Reach LinaStyledYou</h3>
-          <p>Email: {settings.contact_email}</p>
-          <p>Phone: {settings.phone}</p>
-          <a
-            href={`https://wa.me/${cleanWhatsApp(settings.whatsapp_number)}?text=${encodeURIComponent(settings.whatsapp_message || "Hello!")}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Chat on WhatsApp
-          </a>
-        </div>
-        <form className="contact" onSubmit={submit}>
-          <input
-            required
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            required
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <textarea
-            required
-            placeholder="Tell us how we can help you."
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-          <button className="darkbtn">Send message</button>
-        </form>
+      <div className="contact-hero">
+        <p className="eyebrow">CLIENT CARE & CONCIERGE</p>
+        <h1>Get in touch.</h1>
+        <p className="lead">
+          Have questions about a piece, sizing, custom orders, or delivery? We are here to assist with every detail.
+        </p>
       </div>
-      {message && <p>{message} <button type="button" className="link" onClick={clearMessage}>×</button></p>}
+
+      <div className="contact-layout">
+        <aside className="contact-info-panel">
+          <div className="contact-info-card">
+            <span className="contact-pill-tag">DIRECT ASSISTANCE</span>
+            <h3>LinaStyledYou Studio</h3>
+            <p className="contact-intro">
+              Reach our boutique team directly for fast styling guidance and order inquiries.
+            </p>
+
+            <div className="contact-methods">
+              {settings.contact_email && (
+                <div className="contact-method-item">
+                  <span className="method-icon">✉</span>
+                  <div>
+                    <label>Email Support</label>
+                    <a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a>
+                  </div>
+                </div>
+              )}
+
+              {settings.phone && (
+                <div className="contact-method-item">
+                  <span className="method-icon">☎</span>
+                  <div>
+                    <label>Phone</label>
+                    <a href={`tel:${settings.phone}`}>{settings.phone}</a>
+                  </div>
+                </div>
+              )}
+
+              {wa && (
+                <div className="contact-method-item">
+                  <span className="method-icon">💬</span>
+                  <div>
+                    <label>Instant WhatsApp</label>
+                    <a
+                      href={`https://wa.me/${wa}?text=${encodeURIComponent(
+                        settings.whatsapp_message || "Hello! I would like to inquire about your store."
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Chat with us
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {wa && (
+              <a
+                className="whatsapp-action-btn"
+                href={`https://wa.me/${wa}?text=${encodeURIComponent(
+                  settings.whatsapp_message || "Hello! I would like to inquire about your store."
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open WhatsApp Concierge <span>→</span>
+              </a>
+            )}
+          </div>
+        </aside>
+
+        <section className="contact-form-panel">
+          <div className="contact-form-card">
+            <h3>Send us a message</h3>
+            <p className="form-subtext">Fill out your details and we will reply within 24 business hours.</p>
+
+            {message && (
+              <div className="contact-alert" role="alert">
+                <span>{message}</span>
+                <button type="button" className="close-btn" onClick={clearMessage} aria-label="Close notification">×</button>
+              </div>
+            )}
+
+            <form className="modern-contact-form" onSubmit={submit}>
+              <div className="form-row">
+                <div className="form-field">
+                  <label htmlFor="contact-name">Your Full Name</label>
+                  <input
+                    id="contact-name"
+                    required
+                    placeholder="e.g. Lina Adams"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="contact-email">Email Address</label>
+                  <input
+                    id="contact-email"
+                    required
+                    type="email"
+                    placeholder="e.g. lina@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="contact-body">How can we help you?</label>
+                <textarea
+                  id="contact-body"
+                  required
+                  rows="5"
+                  placeholder="Tell us about the item, question, or order..."
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                />
+              </div>
+
+              <button className="darkbtn contact-submit-btn" disabled={loading}>
+                {loading ? "Sending message..." : "Send Message →"}
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
@@ -1118,7 +1643,7 @@ function ProductManager({ headers, products, setProducts }) {
       .map((name) => ({ name, stock: Number(form.stock) || 0 }));
     const body = {
       name: form.name,
-      categoryId: Number(form.categoryId),
+      categoryId: form.categoryId,
       description: form.description,
       price: Number(form.price),
       discountPrice: form.discountPrice ? Number(form.discountPrice) : null,
@@ -1126,7 +1651,7 @@ function ProductManager({ headers, products, setProducts }) {
       sku: form.sku,
       brand: form.brand || undefined,
       image: form.image || undefined,
-      sizes,
+      ...(!editing ? { sizes } : {}),
     };
     const response = await fetch(
       editing ? API + "/admin/products/" + editing : API + "/admin/products",
@@ -1285,15 +1810,19 @@ function ProductManager({ headers, products, setProducts }) {
             onChange={change}
           />
         </label>
-        <label>
-          Sizes, separated by commas
-          <input
-            name="sizes"
-            placeholder="Small, Medium, Large"
-            value={form.sizes}
-            onChange={change}
-          />
-        </label>
+        {!editing ? (
+          <label>
+            Sizes, separated by commas
+            <input
+              name="sizes"
+              placeholder="Small, Medium, Large"
+              value={form.sizes}
+              onChange={change}
+            />
+          </label>
+        ) : (
+          <p>Product variants are preserved when editing product details.</p>
+        )}
         <button className="darkbtn" type="submit">
           {editing ? "Save changes" : "Add product"}
         </button>
@@ -1881,28 +2410,103 @@ function Admin() {
 }
 function Footer() {
   const settings = useStore();
+  const year = new Date().getFullYear();
+  const wa = cleanWhatsApp(settings.whatsapp_number);
+
   return (
-    <footer>
-      <div className="logo">{settings.store_name || "LinaStyledYou"}</div>
-      <p>{settings.tag_line || "Curated beauty, wherever you are."}</p>
-      <div className="footer-links">
-        <a
-          href={settings.instagram_url || "#"}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Instagram
-        </a>
-        <a href={settings.tiktok_url || "#"} target="_blank" rel="noreferrer">
-          TikTok
-        </a>
-        <a
-          href={`https://wa.me/${cleanWhatsApp(settings.whatsapp_number)}?text=${encodeURIComponent(settings.whatsapp_message || "Hello!")}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          WhatsApp
-        </a>
+    <footer className="store-footer">
+      <div className="footer-top">
+        <div className="footer-col brand-col">
+          <Link className="logo" to="/">
+            <Brand />
+          </Link>
+          <p className="footer-tagline">
+            {settings.tag_line || "Curated beauty, delivered worldwide. Made for your glow."}
+          </p>
+          <div className="footer-socials">
+            {settings.instagram_url && (
+              <a
+                href={settings.instagram_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Instagram"
+                className="social-btn"
+              >
+                Instagram
+              </a>
+            )}
+            {settings.tiktok_url && (
+              <a
+                href={settings.tiktok_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="TikTok"
+                className="social-btn"
+              >
+                TikTok
+              </a>
+            )}
+            {wa && (
+              <a
+                href={`https://wa.me/${wa}?text=${encodeURIComponent(
+                  settings.whatsapp_message || "Hello! I would like to inquire about your store."
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="WhatsApp"
+                className="social-btn whatsapp-social"
+              >
+                WhatsApp Chat
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div className="footer-col">
+          <h4>Explore</h4>
+          <ul className="footer-nav">
+            <li><Link to="/shop">Shop Collection</Link></li>
+            <li><Link to="/cart">My Bag</Link></li>
+            <li><Link to="/account">Track Orders</Link></li>
+          </ul>
+        </div>
+
+        <div className="footer-col">
+          <h4>Client Care</h4>
+          <ul className="footer-nav">
+            <li><Link to="/contact">Contact Support</Link></li>
+            <li><Link to="/account">My Account</Link></li>
+            <li>
+              <a
+                href={`https://wa.me/${wa}?text=${encodeURIComponent(
+                  "Hello! I have a question about my order."
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Order Assistance
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div className="footer-col promise-col">
+          <h4>The Experience</h4>
+          <p className="footer-promise">
+            {settings.shipping_message || "Worldwide luxury shipping & secure door-to-door delivery."}
+          </p>
+          <div className="payment-badges">
+            <span className="pay-badge">✓ Secure Checkout</span>
+            <span className="pay-badge">✓ Authentic Beauty</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="footer-bottom">
+        <p>© {year} {settings.store_name || "LinaStyledYou"}. All rights reserved.</p>
+        <div className="footer-legal">
+          <span>Made for your glow</span>
+        </div>
       </div>
     </footer>
   );
@@ -1912,17 +2516,74 @@ function App() {
     try { return JSON.parse(localStorage.getItem("store-cart") || "[]"); }
     catch { return []; }
   });
+  const [cartError, setCartError] = useState("");
   const [settings, setSettings] = useState(defaultSettings);
   useEffect(() => { localStorage.setItem("store-cart", JSON.stringify(cart)); }, [cart]);
+
+  async function syncServerCart(token, guestItems) {
+    const hasGuestItems = guestItems.length > 0;
+    const response = await fetch(API + (hasGuestItems ? "/cart/merge" : "/cart"), {
+      method: hasGuestItems ? "POST" : "GET",
+      headers: {
+        Authorization: "Bearer " + token,
+        ...(hasGuestItems ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(hasGuestItems
+        ? {
+            body: JSON.stringify({
+              items: guestItems.map((item) => ({
+                productId: item.product_id ?? item.id,
+                variantId: item.variant_id ?? item.variantId ?? null,
+                quantity: Number(item.quantity),
+              })),
+            }),
+          }
+        : {}),
+    });
+    const result = await response.json().catch(() => []);
+    if (!response.ok) {
+      throw new Error(result.message || "Your saved bag could not be synced.");
+    }
+    const items = mapServerCart(result);
+    setCart(items);
+    setCartError("");
+    return items;
+  }
+
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    const headers = { Authorization: "Bearer " + token };
-    fetch(API + "/cart", { headers })
-      .then((response) => response.ok ? response.json() : [])
-      .then((items) => setCart(items.map((item) => ({ ...item, id: item.product_id, cartItemId: item.id }))))
-      .catch(() => {});
+    const sync = () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // User logged out: clear stored cart state so guest doesn't inherit user's server cart
+        try {
+          const stored = JSON.parse(localStorage.getItem("store-cart") || "[]");
+          setCart(stored);
+        } catch {
+          setCart([]);
+        }
+        return;
+      }
+      let guestItems = [];
+      try {
+        guestItems = JSON.parse(localStorage.getItem("store-cart") || "[]");
+      } catch {
+        setCartError("Your saved bag could not be read. Remove it or try again.");
+        return;
+      }
+      syncServerCart(token, guestItems).then(() => {
+        // Once successfully merged into server cart, clear local guest bag
+        if (guestItems.length > 0) {
+          localStorage.removeItem("store-cart");
+        }
+      }).catch((error) => {
+        setCartError(error.message || "Your saved bag could not be synced.");
+      });
+    };
+    sync();
+    window.addEventListener("store-auth-changed", sync);
+    return () => window.removeEventListener("store-auth-changed", sync);
   }, []);
+
   function authHeaders() {
     const token = localStorage.getItem("token");
     return token ? { Authorization: "Bearer " + token, "Content-Type": "application/json" } : null;
@@ -1936,50 +2597,112 @@ function App() {
   const value = useMemo(
     () => ({
       cart,
+      cartError,
+      retrySync: () => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        try {
+          const guestItems = JSON.parse(localStorage.getItem("store-cart") || "[]");
+          syncServerCart(token, guestItems).catch((error) => {
+            setCartError(error.message || "Your saved bag could not be synced.");
+          });
+        } catch {
+          setCartError("Your saved bag could not be read. Remove it or try again.");
+        }
+      },
       clear: () => {
         setCart([]);
         const headers = authHeaders();
-        if (headers) fetch(API + "/cart", { method: "DELETE", headers }).catch(() => {});
+        setCartError("");
+        if (headers) {
+          fetch(API + "/cart", { method: "DELETE", headers })
+            .then((response) => {
+              if (!response.ok) throw new Error("The saved bag could not be cleared.");
+            })
+            .catch((error) => setCartError(error.message));
+        }
       },
-      add: (p) => {
+      add: async (p) => {
         const headers = authHeaders();
         if (headers) {
-          fetch(API + "/cart/items", { method: "POST", headers, body: JSON.stringify({ productId: p.id, quantity: 1, variantId: p.variantId || null }) })
-            .then(() => fetch(API + "/cart", { headers }))
-            .then((response) => response.ok ? response.json() : [])
-            .then((items) => setCart(items.map((item) => ({ ...item, id: item.product_id, cartItemId: item.id }))));
+          try {
+            const response = await fetch(API + "/cart/items", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                productId: p.id,
+                quantity: 1,
+                variantId: p.variantId || null,
+              }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.message || "Could not add this item.");
+            await syncServerCart(localStorage.getItem("token"), []);
+          } catch (error) {
+            setCartError(error.message || "Could not add this item.");
+          }
           return;
         }
         setCart((c) => {
-          let x = c.find((i) => i.id === p.id);
-          return x
-            ? c.map((i) =>
-                i.id === p.id
-                  ? { ...i, quantity: Math.min(i.quantity + 1, p.stock) }
-                  : i,
-              )
-            : [...c, { ...p, quantity: 1 }];
+          const candidate = { ...p, variantId: p.variantId ?? null };
+          const key = cartItemKey(candidate);
+          const existing = c.find((item) => cartItemKey(item) === key);
+          if (existing) {
+            return c.map((item) =>
+              cartItemKey(item) === key
+                ? { ...item, quantity: Math.min(item.quantity + 1, p.stock) }
+                : item
+            );
+          }
+          return [...c, { ...candidate, quantity: 1, cartKey: key }];
         });
+        setCartError("");
       },
-      remove: (id) => {
-        setCart((c) => {
-          const item = c.find((entry) => entry.id === id);
-          const headers = authHeaders();
-          if (headers && item?.cartItemId) fetch(API + "/cart/items/" + item.cartItemId, { method: "DELETE", headers }).catch(() => {});
-          return c.filter((i) => i.id !== id);
-        });
+      remove: async (key) => {
+        const item = cart.find((entry) => cartItemKey(entry) === key);
+        const headers = authHeaders();
+        if (headers && item?.cartItemId) {
+          try {
+            const response = await fetch(API + "/cart/items/" + item.cartItemId, {
+              method: "DELETE",
+              headers,
+            });
+            if (!response.ok) throw new Error("Could not remove this item.");
+          } catch (error) {
+            setCartError(error.message || "Could not remove this item.");
+            return;
+          }
+        }
+        setCart((items) => items.filter((entry) => cartItemKey(entry) !== key));
+        setCartError("");
       },
-      change: (id, d) => {
-        setCart((c) => {
-          const item = c.find((entry) => entry.id === id);
-          const quantity = item ? Math.max(1, Math.min(item.stock, item.quantity + d)) : 1;
-          const headers = authHeaders();
-          if (headers && item?.cartItemId) fetch(API + "/cart/items/" + item.cartItemId, { method: "PUT", headers, body: JSON.stringify({ quantity }) }).catch(() => {});
-          return c.map((entry) => entry.id === id ? { ...entry, quantity } : entry);
-        });
+      change: async (key, delta) => {
+        const item = cart.find((entry) => cartItemKey(entry) === key);
+        if (!item) return;
+        const quantity = Math.max(1, Math.min(item.stock, item.quantity + delta));
+        const headers = authHeaders();
+        if (headers && item.cartItemId) {
+          try {
+            const response = await fetch(API + "/cart/items/" + item.cartItemId, {
+              method: "PUT",
+              headers,
+              body: JSON.stringify({ quantity }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.message || "Could not update quantity.");
+            await syncServerCart(localStorage.getItem("token"), []);
+          } catch (error) {
+            setCartError(error.message || "Could not update quantity.");
+          }
+          return;
+        }
+        setCart((items) => items.map((entry) =>
+          cartItemKey(entry) === key ? { ...entry, quantity } : entry
+        ));
+        setCartError("");
       },
     }),
-    [cart],
+    [cart, cartError],
   );
   return (
     <Store.Provider value={settings}>
@@ -1992,6 +2715,7 @@ function App() {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />

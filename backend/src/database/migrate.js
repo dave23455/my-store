@@ -1,5 +1,9 @@
 import fs from 'fs';
-import { pool } from '../config/db.js';
+import { isMemoryDatabase, pool } from '../config/db.js';
+
+if (isMemoryDatabase) {
+	throw new Error('DATABASE_URL could not connect to PostgreSQL. Migration aborted; no changes were applied.');
+}
 
 const legacy = await pool.query("SELECT 1 FROM information_schema.columns WHERE table_name='store_settings' AND column_name='data'");
 if (!legacy.rowCount) {

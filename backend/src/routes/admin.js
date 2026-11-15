@@ -3,6 +3,7 @@ import { query } from "../config/db.js";
 import { authenticate, adminOnly } from "../middleware/auth.js";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { ownerOnly } from "../middleware/auth.js";
 const r = Router();
 r.use(authenticate, adminOnly);
@@ -263,7 +264,7 @@ r.get("/customers", async (req, res, next) => {
     res.json(
       (
         await query(
-          `SELECT u.id,u.name,u.email,u.phone,u.created_at,COALESCE(SUM(o.total) FILTER(WHERE o.payment_status='paid'),0) total_spending,COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id=u.id WHERE u.role IN('customer','employee') GROUP BY u.id ORDER BY u.created_at DESC`,
+          `SELECT u.public_id id,u.name,u.email,u.phone,u.created_at,COALESCE(SUM(o.total) FILTER(WHERE o.payment_status='paid'),0) total_spending,COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id=u.id WHERE u.role IN('customer','employee') GROUP BY u.id ORDER BY u.created_at DESC`,
         )
       ).rows,
     );
@@ -273,7 +274,7 @@ r.get("/customers", async (req, res, next) => {
 });
 r.get("/staff", async (req, res, next) => {
   try {
-    res.json((await query("SELECT id,name,email,role,created_at FROM users WHERE role IN('admin','owner') ORDER BY role DESC,created_at")).rows);
+    res.json((await query("SELECT public_id id,name,email,role,created_at FROM users WHERE role IN('admin','owner') ORDER BY role DESC,created_at")).rows);
   } catch (e) { next(e); }
 });
 r.post("/staff", ownerOnly, async (req, res, next) => {
@@ -284,13 +285,13 @@ r.post("/staff", ownerOnly, async (req, res, next) => {
       if (existingOwner.rowCount) return res.status(409).json({ message: "Only one owner account is allowed." });
     }
     const passwordHash = await bcrypt.hash(value.password, 12);
-    const result = await query("INSERT INTO users(name,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,name,email,role,created_at", [value.name.trim(), value.email.toLowerCase(), passwordHash, value.role]);
+    const result = await query("INSERT INTO users(name,email,password_hash,role,public_id) VALUES($1,$2,$3,$4,$5) RETURNING public_id id,name,email,role,created_at", [value.name.trim(), value.email.toLowerCase(), passwordHash, value.role, randomUUID()]);
     res.status(201).json(result.rows[0]);
   } catch (e) { if (e.code === "23505") return res.status(409).json({ message: "An account with this email already exists." }); next(e); }
 });
 r.delete("/staff/:id", ownerOnly, async (req, res, next) => {
   try {
-    const result = await query("DELETE FROM users WHERE id=$1 AND role='admin' RETURNING id", [req.params.id]);
+    const result = await query("DELETE FROM users WHERE public_id=$1 AND role='admin' RETURNING public_id id", [req.params.id]);
     if (!result.rowCount) return res.status(409).json({ message: "Only admin accounts can be removed here." });
     res.status(204).end();
   } catch (e) { next(e); }

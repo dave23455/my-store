@@ -19,14 +19,3 @@ export const UpdateProfileSchema = z.object({
   phone: z.string().max(50).optional(),
 });
 export type UpdateProfileDTO = z.infer<typeof UpdateProfileSchema>;
-
-export const ForgotPasswordSchema = z.object({
-  email: z.string().email(),
-});
-export type ForgotPasswordDTO = z.infer<typeof ForgotPasswordSchema>;
-
-export const ResetPasswordSchema = z.object({
-  token: z.string().min(20, "Invalid reset token"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-export type ResetPasswordDTO = z.infer<typeof ResetPasswordSchema>;
