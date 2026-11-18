@@ -3,13 +3,18 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "build": "node scripts/build.js",
+    "start": "node app.js",
+    "start:dist": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.js",
-    "db:migrate": "node src/database/migrate.js",
-    "db:seed": "node src/database/seed.js"
+    "db:migrate": "node dist/database/migrate.js",
+    "db:seed": "node dist/database/seed.js",
+    "db:migrate:source": "node src/database/migrate.js",
+    "db:seed:source": "node src/database/seed.js"
   },
   "dependencies": {
+    "@react-email/render": "^2.3.1",
     "auto-bind": "^5.0.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -20,6 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "pg-mem": "^3.0.14",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "swagger-ui-express": "^5.0.1",
     "tsx": "^4.20.6",
     "yamljs": "^0.3.0",
@@ -32,8 +39,12 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/yamljs": "^0.2.34",
+    "tsx": "^4.20.6",
     "typescript": "^7.0.2"
-  }
+  },
+  "engines": { "node": ">=20.19.0" }
 }

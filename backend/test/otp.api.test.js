@@ -117,7 +117,8 @@ test("registration requires email verification and exposes only a UUID user ID",
   assert.equal(registration.nextStep.body.userId, registration.userId);
   assert.match(registration.message, /check your email/i);
   assert.match(sentEmails[0].text, /\b\d{6}\b/);
-  assert.doesNotMatch(JSON.stringify(sentEmails[0]), /html/i);
+  assert.match(sentEmails[0].html, /Verify your email/);
+  assert.match(sentEmails[0].html, /\b\d{6}\b/);
   const verificationOtp = sentEmails[0].text.match(/\b(\d{6})\b/)?.[1];
   assert.match(verificationOtp, /^\d{6}$/);
 

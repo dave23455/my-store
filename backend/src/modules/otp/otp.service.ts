@@ -311,17 +311,3 @@ export class OtpService {
 }
 
 export const otpService = new OtpService();
-
-export function startOtpCleanup(db: Pool = pool): NodeJS.Timeout {
-  const interval = setInterval(() => {
-    db.query("DELETE FROM password_reset_otps WHERE expires_at <= now()")
-        .then(() =>
-          db.query("DELETE FROM email_verification_otps WHERE expires_at <= now()")
-        )
-        .catch((error: unknown) => {
-          console.error("[otp] Failed to remove expired OTPs:", error);
-        });
-  }, 10 * 60 * 1000);
-  interval.unref();
-  return interval;
-}

@@ -23,8 +23,8 @@ button, input, select, textarea { max-width: 100%; }
   .shipping h2 { margin: 0; }
   .shipping p { margin-bottom: 0; }
   .product .darkbtn { width: 100%; }
-  .variant-label { display: grid; gap: 8px; }
-  .variant-label select { width: 100%; min-height: 46px; }
+  .variant-label { width: 100%; }
+  .variant-label select { min-height: 52px; }
   .cartrow > div { flex: 1; min-width: 0; }
   .cartrow .link { align-self: flex-start; padding: 4px 0; }
   .cart aside { padding: 16px; border: 1px solid #e889ad; border-radius: 12px; background: #f9d8e4; }

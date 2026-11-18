@@ -277,7 +277,9 @@ export function PaymentCallback() {
     <main className="page auth">
       <h1>Payment status</h1>
       <p>{message}</p>
-      <Link to="/account">View my orders</Link>
+      <Link className="back-link" to="/account">
+        <span aria-hidden="true">←</span> Back to my orders
+      </Link>
     </main>
   );
 }

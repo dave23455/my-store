@@ -1,13 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import pg, { QueryResult, QueryResultRow } from 'pg';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import 'dotenv/config';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const memorySeedSql = `
   CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,public_id UUID NOT NULL UNIQUE,name VARCHAR(100) NOT NULL,email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,role VARCHAR(20) NOT NULL DEFAULT 'customer' CHECK(role IN('customer','employee','admin','owner')),phone VARCHAR(50),email_verified BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ DEFAULT now());
@@ -87,15 +81,26 @@ let usingMemoryFallback = false;
 async function createPool(): Promise<any> {
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) {
-    for (const ssl of [undefined, true]) {
-      const pgPool = new pg.Pool({ connectionString, ssl });
-      try {
-        await pgPool.query('SELECT 1');
-        return pgPool;
-      } catch {
-        await pgPool.end().catch(() => {});
+    const pgPool = new pg.Pool({
+      connectionString,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+    try {
+      await pgPool.query('SELECT 1');
+      return pgPool;
+    } catch (error) {
+      await pgPool.end().catch(() => {});
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('DATABASE_URL must connect successfully in production.', { cause: error });
       }
     }
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('DATABASE_URL must connect successfully in production; refusing to use an in-memory database.');
   }
 
   // Fallback to pg-mem

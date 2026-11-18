@@ -1,4 +1,7 @@
 import { ApiError } from "../utils/api.response.utils.js";
+import { createElement } from "react";
+import { render } from "@react-email/render";
+import { VerificationEmail } from "./verification-email.js";
 
 interface VerificationEmail {
   to: string;
@@ -21,6 +24,11 @@ export async function sendVerificationOtpEmail({
     );
   }
 
+  const text = `Your LinaStyledYou verification code is ${otp}. It expires at ${expiresAt.toISOString()}. If you did not create this account, you can ignore this email.`;
+  const html = await render(createElement(VerificationEmail, {
+    otp,
+    expiresAt: expiresAt.toISOString(),
+  }));
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -31,7 +39,8 @@ export async function sendVerificationOtpEmail({
       from,
       to: [to],
       subject: "Verify your LinaStyledYou account",
-      text: `Your LinaStyledYou verification code is ${otp}. It expires at ${expiresAt.toISOString()}. If you did not create this account, you can ignore this email.`,
+      text,
+      html,
     }),
   });
 

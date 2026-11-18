@@ -206,3 +206,4 @@ Also reconcile the project overview's stated table count with the tables listed 
 - Existing URLs, status codes, response shapes, authentication, and authorization are preserved.
 - Related regression checks pass before the legacy implementation is removed.
 - API documentation and the project overview are updated when the feature surface or architecture changes.
+

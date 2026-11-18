@@ -15,6 +15,9 @@ export function CartPage() {
   );
   return (
     <main className="page cart">
+      <Link className="back-link" to="/shop">
+        <span aria-hidden="true">←</span> Continue shopping
+      </Link>
       <h1>Your bag</h1>
       {cartError && (
         <p role="alert">
@@ -289,6 +292,9 @@ export function Checkout() {
   }
   return (
     <main className="page checkout">
+      <Link className="back-link" to="/cart">
+        <span aria-hidden="true">←</span> Back to your bag
+      </Link>
       <h1>Checkout</h1>
       <p>{settings.shipping_message || "Worldwide delivery details"}</p>
       <form className="contact" onSubmit={submit}>

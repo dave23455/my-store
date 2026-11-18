@@ -240,6 +240,9 @@ export function Product() {
   return (
     <>
       <main className="product">
+        <Link className="back-link" to="/shop">
+          <span aria-hidden="true">←</span> Back to shop
+        </Link>
         <div className="product-gallery">
           <img
             className="product-gallery-main"
@@ -287,8 +290,7 @@ export function Product() {
                 <option value="">Select a size</option>
                 {p.variants.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.name} — {Object.values(v.options).join(" / ")} ({v.stock}{" "}
-                    left)
+                    {v.name}{Object.values(v.options).length ? ` — ${Object.values(v.options).join(" / ")}` : ""}
                   </option>
                 ))}
               </select>
