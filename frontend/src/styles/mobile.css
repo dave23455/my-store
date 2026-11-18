@@ -1,0 +1,52 @@
+/* Phone-first storefront refinements */
+html, body, #root { max-width: 100%; overflow-x: clip; }
+button, input, select, textarea { max-width: 100%; }
+.grid > *, .product > *, .cart > *, .contact-grid > *, .admin-shell > * { min-width: 0; }
+
+@media (max-width: 600px) {
+  /* 16px inputs prevent Safari from automatically zooming while customers type. */
+  input, select, textarea { font-size: 16px; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  .notice { padding-left: 16px; padding-right: 16px; }
+  .sectionhead { align-items: flex-end; gap: 12px; }
+  .sectionhead a { flex: 0 0 auto; font-size: 13px; }
+  .collection .grid, .page > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .card .badge { top: 8px; left: 8px; padding: 4px 6px; font-size: 8px; }
+  .card small { font-size: 11px; }
+  .card strong { font-size: 17px; }
+  .card button { margin-top: 8px; min-height: 40px; font-size: 13px; }
+  .shipping { display: grid; gap: 16px; padding: 38px 20px; }
+  .shipping span { display: none; }
+  .shipping h2 { margin: 0; }
+  .shipping p { margin-bottom: 0; }
+  .product .darkbtn { width: 100%; }
+  .variant-label { width: 100%; }
+  .variant-label select { min-height: 52px; }
+  .cartrow > div { flex: 1; min-width: 0; }
+  .cartrow .link { align-self: flex-start; padding: 4px 0; }
+  .cart aside { padding: 16px; border: 1px solid #e889ad; border-radius: 12px; background: #f9d8e4; }
+  .cart aside .darkbtn { width: 100%; text-align: center; }
+  .account-header, .account-order { align-items: flex-start; }
+  .account-header { flex-direction: column; }
+  .account-order { flex-direction: column; }
+  .name-form { display: grid; gap: 10px; }
+  .name-form label { display: grid; gap: 8px; }
+  .name-form .darkbtn { width: 100%; text-align: center; }
+  .payment-confirmation { display: grid; gap: 10px; }
+  .payment-confirmation input, .payment-confirmation textarea { width: 100%; }
+  .footer-links { gap: 12px 18px; }
+}
+
+@media (max-width: 360px) {
+  .brand-lina, .brand-you { font-size: 19px; }
+  .brand-styled { font-size: 23px; }
+  header { padding-left: 12px; padding-right: 12px; }
+  nav { left: 12px; right: 12px; }
+  .hero { padding-left: 16px; padding-right: 16px; }
+  .collection, .page, .product { padding-left: 12px; padding-right: 12px; }
+  .collection .grid, .page > .grid { gap: 9px; }
+  .card h3 { font-size: 14px; }
+}

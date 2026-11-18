@@ -1,4 +1,5 @@
 import express, { Express } from "express";
+import type { Request, Response } from "express";
 import helmet from "helmet";
 import cors from "cors";
 import YAML from "yamljs";
@@ -6,8 +7,9 @@ import swaggerUi from "swagger-ui-express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import apiRouter from "./routes/index.js";
-import { limiter } from "./middleware/http.middleware.js";
 import { errorHandler } from "./middleware/error-handler.middleware.js";
+import { asyncHandler, limiter } from "./middleware/http.middleware.js";
+import { paymentService } from "./modules/payments/payment.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,6 +43,43 @@ export const createApp = (): Express => {
   );
 
   app.use(limiter);
+  app.post(
+    "/api/payments/webhook",
+    express.raw({ type: "application/json" }),
+    asyncHandler(async (req: Request, res: Response) => {
+      if (!Buffer.isBuffer(req.body)) {
+        res.status(400).json({ message: "Invalid webhook payload" });
+        return;
+      }
+      const signature = req.headers["x-paystack-signature"];
+      if (!paymentService.validWebhook(signature, req.body)) {
+        res.sendStatus(401);
+        return;
+      }
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(req.body.toString());
+      } catch {
+        res.status(400).json({ message: "Invalid webhook payload" });
+        return;
+      }
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        res.status(400).json({ message: "Invalid webhook payload" });
+        return;
+      }
+      const event = payload as { event?: unknown; data?: { reference?: unknown } };
+
+      if (
+        event.event === "charge.success" &&
+        typeof event.data?.reference === "string" &&
+        event.data.reference.length > 0
+      ) {
+        await paymentService.verifyPayment(event.data.reference);
+      }
+      res.sendStatus(200);
+    })
+  );
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: true }));
 

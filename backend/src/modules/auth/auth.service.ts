@@ -1,16 +1,14 @@
 import autoBind from "auto-bind";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
-import { query } from "../../config/db.js";
+import { randomUUID } from "node:crypto";
+import { pool, query } from "../../config/db.js";
 import { ApiError, ApiSuccess } from "../../utils/api.response.utils.js";
-import { sendPasswordResetEmail } from "../../services/email.service.js";
+import { otpService } from "../otp/otp.service.js";
 import {
   RegisterDTO,
   LoginDTO,
   UpdateProfileDTO,
-  ForgotPasswordDTO,
-  ResetPasswordDTO,
 } from "./dto/auth.dto.js";
 import { User, UserRole } from "../../types/database.types.js";
 
@@ -19,18 +17,18 @@ export class AuthService {
     autoBind(this);
   }
 
-  public generateToken(user: { id: number; role: UserRole; email: string; name: string }): string {
+  public generateToken(user: { public_id: string; role: UserRole; email: string; name: string }): string {
     const secret = process.env.JWT_SECRET || "default_secret";
     return jwt.sign(
-      { id: user.id, role: user.role, email: user.email, name: user.name },
+      { sub: user.public_id, role: user.role, email: user.email, name: user.name },
       secret,
       { expiresIn: "7d" }
     );
   }
 
-  public formatUser(user: Partial<User>) {
+  public formatUser(user: Partial<User> & Pick<User, "public_id">) {
     return {
-      id: user.id,
+      id: user.public_id,
       name: user.name,
       email: user.email,
       role: user.role,
@@ -47,22 +45,46 @@ export class AuthService {
 
   public async register(dto: RegisterDTO) {
     const hash = await bcrypt.hash(dto.password, 12);
+    const publicId = randomUUID();
+    const client = await pool.connect();
+    let userRecord: User;
     try {
-      const result = await query(
-        `INSERT INTO users(name, email, password_hash, phone)
-         VALUES($1, $2, $3, $4)
-         RETURNING id, name, email, role, phone, created_at`,
-        [dto.name || "Customer", dto.email.toLowerCase(), hash, dto.phone || null]
+      await client.query("BEGIN");
+      const result = await client.query<User>(
+        `INSERT INTO users(name, email, password_hash, phone, public_id, email_verified)
+         VALUES($1, $2, $3, $4, $5, false)
+         RETURNING id, public_id, name, email, password_hash, role, phone, email_verified, created_at`,
+        [dto.name || "Customer", dto.email.toLowerCase(), hash, dto.phone || null, publicId]
       );
-      const user = this.formatUser(result.rows[0]);
-      const token = this.generateToken(result.rows[0]);
-      return ApiSuccess.created("Account created successfully", { user, token });
+      userRecord = result.rows[0];
+      await client.query("COMMIT");
     } catch (error: any) {
+      await client.query("ROLLBACK");
       if (error?.code === "23505") {
         throw ApiError.conflict("An account with this email already exists. Please sign in instead.");
       }
       throw error;
+    } finally {
+      client.release();
     }
+
+    await otpService.issueEmailVerificationOtp(
+      userRecord.id,
+      publicId,
+      userRecord.email
+    );
+    const user = this.formatUser(userRecord);
+    return ApiSuccess.created("Account created. Check your email and verify your account before signing in.", {
+      user,
+      userId: publicId,
+      message: "Check your email for the six-digit verification code, then verify your account before signing in.",
+      nextStep: {
+        action: "verify_email",
+        method: "POST",
+        endpoint: "/auth/verifyemail",
+        body: { userId: publicId, otp: "<6-digit code from your email>" },
+      },
+    });
   }
 
   public async login(dto: LoginDTO) {
@@ -76,6 +98,9 @@ export class AuthService {
     if (!passwordMatch) {
       throw ApiError.unauthorized("Invalid email or password");
     }
+    if (!userRecord.email_verified) {
+      throw ApiError.forbidden("Please verify your email before signing in.");
+    }
 
     const user = this.formatUser(userRecord);
     const token = this.generateToken(userRecord);
@@ -84,7 +109,7 @@ export class AuthService {
 
   public async getProfile(userId: number) {
     const userRes = await query(
-      "SELECT id, name, email, role, phone, created_at FROM users WHERE id = $1",
+      "SELECT id, public_id, name, email, role, phone, created_at FROM users WHERE id = $1",
       [userId]
     );
     if (!userRes.rowCount) {
@@ -96,7 +121,13 @@ export class AuthService {
         "SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total_spent FROM orders WHERE user_id = $1",
         [userId]
       ),
-      query("SELECT * FROM addresses WHERE user_id = $1", [userId]),
+      query(
+        `SELECT a.public_id AS id,u.public_id AS user_id,a.name,a.phone,a.country,
+          a.region,a.city,a.address,a.postal_code
+         FROM addresses a JOIN users u ON u.id=a.user_id
+         WHERE a.user_id=$1`,
+        [userId]
+      ),
     ]);
 
     const user = {
@@ -117,7 +148,7 @@ export class AuthService {
        SET name = COALESCE($1, name),
            phone = COALESCE($2, phone)
        WHERE id = $3
-       RETURNING id, name, email, role, phone, created_at`,
+       RETURNING id, public_id, name, email, role, phone, created_at`,
       [dto.name ? dto.name.trim() : null, dto.phone || null, userId]
     );
 
@@ -129,45 +160,4 @@ export class AuthService {
     return ApiSuccess.ok("Profile updated", { user });
   }
 
-  public async forgotPassword(dto: ForgotPasswordDTO) {
-    const result = await query("SELECT id FROM users WHERE email = $1", [dto.email.toLowerCase()]);
-    if (result.rowCount) {
-      const rawToken = crypto.randomBytes(32).toString("hex");
-      const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
-      await query(
-        "INSERT INTO password_reset_tokens(user_id, token_hash, expires_at) VALUES($1, $2, now() + interval '30 minutes')",
-        [result.rows[0].id, hash]
-      );
-      const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-      await sendPasswordResetEmail({
-        to: dto.email,
-        link: `${clientUrl}/reset-password?token=${rawToken}`,
-      });
-    }
-
-    return ApiSuccess.ok("If that email exists, a reset link will be sent.");
-  }
-
-  public async resetPassword(dto: ResetPasswordDTO) {
-    const hash = crypto.createHash("sha256").update(dto.token).digest("hex");
-    const tokenRes = await query(
-      "SELECT * FROM password_reset_tokens WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()",
-      [hash]
-    );
-
-    if (!tokenRes.rowCount) {
-      throw ApiError.badRequest("This reset link is invalid or expired");
-    }
-
-    const newPasswordHash = await bcrypt.hash(dto.password, 12);
-    await query("UPDATE users SET password_hash = $1 WHERE id = $2", [
-      newPasswordHash,
-      tokenRes.rows[0].user_id,
-    ]);
-    await query("UPDATE password_reset_tokens SET used_at = now() WHERE id = $1", [
-      tokenRes.rows[0].id,
-    ]);
-
-    return ApiSuccess.ok("Password updated successfully. You can now sign in.");
-  }
 }

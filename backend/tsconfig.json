@@ -2,15 +2,18 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
+    "jsx": "react-jsx",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
+    "allowJs": true,
+    "checkJs": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/server.ts", "src/database/migrate.js", "src/database/seed.js"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,4 +1,5 @@
 ﻿import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import { pool } from '../config/db.js';
 
 const categories = ['Hair', 'Wigs', 'Bundles', 'Closures', 'Frontals', 'Clothing', 'Shoes', 'Bags', 'Beauty', 'Accessories'];
@@ -13,7 +14,7 @@ await pool.query('INSERT INTO store_settings(id,data) VALUES(1,$1) ON CONFLICT(i
   contact_email: 'kehindelina@gmail.com',
   phone: '+2348065205096',
   whatsapp_number: '2348065205096',
-  instagram_url: 'https://instagram.com/linachili_linastyledyou',
+  instagram_url: 'https://www.instagram.com/linastyled.you?obrf=NW55b200cDQ5MWs%3D&utm_source=qr',
   tiktok_url: 'https://www.tiktok.com/@linachili',
   whatsapp_message: 'Hello! I would like to make an order.',
   currency: 'NGN',
@@ -29,10 +30,10 @@ if (process.env.OWNER_EMAIL && process.env.OWNER_PASSWORD) {
   const email = process.env.OWNER_EMAIL.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(process.env.OWNER_PASSWORD, 12);
   await pool.query(
-    `INSERT INTO users(name,email,password_hash,role)
-     VALUES($1,$2,$3,'owner')
+    `INSERT INTO users(name,email,password_hash,role,public_id)
+     VALUES($1,$2,$3,'owner',$4)
      ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='owner'`,
-    [process.env.OWNER_NAME || 'Store Owner', email, passwordHash],
+    [process.env.OWNER_NAME || 'Store Owner', email, passwordHash, randomUUID()],
   );
   console.log(`Owner account ready for ${email}`);
 }
@@ -47,9 +48,9 @@ if (process.env.ADMIN_ACCOUNTS) {
       const passwordHash = await bcrypt.hash(account.password, 12);
       await pool.query(
         `INSERT INTO users(name,email,password_hash,role)
-         VALUES($1,$2,$3,'admin')
+         VALUES($1,$2,$3,'admin',$4)
          ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
-        [account.name || 'Store Admin', email, passwordHash],
+        [account.name || 'Store Admin', email, passwordHash, randomUUID()],
       );
     }
     console.log(`Admin accounts ready: ${accounts.length}`);
@@ -63,9 +64,9 @@ if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
   await pool.query(
     `INSERT INTO users(name,email,password_hash,role)
-     VALUES($1,$2,$3,'admin')
+     VALUES($1,$2,$3,'admin',$4)
       ON CONFLICT(email) DO UPDATE SET name=$1,password_hash=$3,role='admin'`,
-    [process.env.ADMIN_NAME || 'Store Admin', email, passwordHash],
+    [process.env.ADMIN_NAME || 'Store Admin', email, passwordHash, randomUUID()],
   );
   console.log(`Admin account ready for ${email}`);
 }
@@ -82,5 +83,3 @@ for (const product of products) {
 }
 console.log('Seeded demo catalog');
 await pool.end();
-
-

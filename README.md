@@ -55,17 +55,4 @@ Set these secret values in the `linastyle-api` Render service after the Blueprin
 
 ## Product images
 
-For product uploads, create a Cloudinary account, open **Settings > Upload > Upload presets**, create an **unsigned** preset limited to images, then set `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` in the Render static site's environment and redeploy. The **Upload product image** picker in Admin > Catalog will then upload the image to Cloudinary and save its secure URL with the product.
-
-### Temporary image URL method
-
-Until Cloudinary is configured, use the **Image URL** field in Admin > Catalog:
-
-1. Upload the picture to a public image host, or use an image already available online.
-2. Copy the direct image address. It should normally end in `.jpg`, `.jpeg`, `.png`, or `.webp` and open the image itself in a browser.
-3. Sign in as Kehinde or Anozie, open **Admin > Catalog**, and complete the product form.
-4. Paste the address into **Image URL**. Leave the file picker unused.
-5. Click **Add product** or **Save changes**.
-6. Open **Shop** and refresh. The product picture should appear.
-
-This method does not require Paystack or Cloudinary. Do not use a webpage address, Google search address, WhatsApp link, or a private Google Drive link; the address must be publicly readable by the browser.
+For product uploads, create a Cloudinary account, open **Settings > Upload > Upload presets**, create an **unsigned** preset limited to images, then set `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` in the frontend's environment and redeploy. The Admin > Catalog picker supports up to eight PNG, JPEG, or WebP images per product (10 MB each), with previews and per-image removal. Product management also supports a size guide, which is displayed on the product detail page.

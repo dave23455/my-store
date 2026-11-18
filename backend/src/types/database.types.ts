@@ -36,16 +36,19 @@ export enum ConfirmationStatus {
 
 export interface User {
   id: number;
+  public_id: string;
   name: string;
   email: string;
   password_hash: string;
   role: UserRole;
   phone?: string | null;
+  email_verified: boolean;
   created_at: Date;
 }
 
 export interface Category {
   id: number;
+  public_id: string;
   name: string;
   slug: string;
   active: boolean;
@@ -54,6 +57,7 @@ export interface Category {
 
 export interface ProductVariant {
   id: number;
+  public_id: string;
   product_id: number;
   name: string;
   options: Record<string, any>;
@@ -64,6 +68,7 @@ export interface ProductVariant {
 
 export interface ProductImage {
   id: number;
+  public_id: string;
   product_id: number;
   url: string;
   alt?: string | null;
@@ -72,6 +77,7 @@ export interface ProductImage {
 
 export interface Product {
   id: number;
+  public_id: string;
   category_id: number;
   name: string;
   description: string;
@@ -91,6 +97,7 @@ export interface Product {
 
 export interface CartItem {
   id: number;
+  public_id: string;
   cart_id: number;
   product_id: number;
   variant_id?: number | null;
@@ -99,6 +106,7 @@ export interface CartItem {
 
 export interface Order {
   id: number;
+  public_id: string;
   user_id?: number | null;
   status: OrderStatus;
   payment_status: PaymentStatus;
@@ -112,6 +120,7 @@ export interface Order {
 
 export interface OrderItem {
   id: number;
+  public_id: string;
   order_id: number;
   product_id?: number | null;
   variant_id?: number | null;
@@ -122,6 +131,7 @@ export interface OrderItem {
 
 export interface PaymentConfirmation {
   id: number;
+  public_id: string;
   order_id: number;
   user_id?: number | null;
   payer_name: string;
