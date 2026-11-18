@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS email_verification_otps(id SERIAL PRIMARY KEY,user_id
 CREATE INDEX IF NOT EXISTS email_verification_otps_expiry ON email_verification_otps(expires_at);
 CREATE TABLE IF NOT EXISTS store_settings(id SMALLINT PRIMARY KEY DEFAULT 1 CHECK(id=1),data JSONB NOT NULL DEFAULT '{}'::jsonb,updated_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS categories(id SERIAL PRIMARY KEY,public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,name VARCHAR(100) UNIQUE NOT NULL,slug VARCHAR(120) UNIQUE NOT NULL,active BOOLEAN DEFAULT true,created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY,public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,category_id INT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,name VARCHAR(255) NOT NULL,description TEXT NOT NULL DEFAULT '',price NUMERIC(12,2) NOT NULL CHECK(price>=0),discount_price NUMERIC(12,2) CHECK(discount_price>=0),stock INT NOT NULL DEFAULT 0 CHECK(stock>=0),sku VARCHAR(100) UNIQUE NOT NULL,brand VARCHAR(100),featured BOOLEAN DEFAULT false,new_arrival BOOLEAN DEFAULT false,best_seller BOOLEAN DEFAULT false,active BOOLEAN DEFAULT true,rating NUMERIC(2,1) DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY,public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,category_id INT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,name VARCHAR(255) NOT NULL,description TEXT NOT NULL DEFAULT '',size_guide TEXT NOT NULL DEFAULT '',price NUMERIC(12,2) NOT NULL CHECK(price>=0),discount_price NUMERIC(12,2) CHECK(discount_price>=0),stock INT NOT NULL DEFAULT 0 CHECK(stock>=0),sku VARCHAR(100) UNIQUE NOT NULL,brand VARCHAR(100),featured BOOLEAN DEFAULT false,new_arrival BOOLEAN DEFAULT false,best_seller BOOLEAN DEFAULT false,active BOOLEAN DEFAULT true,rating NUMERIC(2,1) DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now());
+ALTER TABLE products ADD COLUMN IF NOT EXISTS size_guide TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS products_search ON products USING gin((name||' '||description||' '||sku) gin_trgm_ops); CREATE INDEX IF NOT EXISTS products_category ON products(category_id);
 CREATE TABLE IF NOT EXISTS product_images(id SERIAL PRIMARY KEY,public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,product_id INT REFERENCES products(id) ON DELETE CASCADE,url TEXT NOT NULL,alt TEXT,position INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS product_variants(id SERIAL PRIMARY KEY,public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,product_id INT REFERENCES products(id) ON DELETE CASCADE,name VARCHAR(100) NOT NULL,options JSONB NOT NULL DEFAULT '{}',price NUMERIC(12,2),stock INT CHECK(stock>=0),sku VARCHAR(100) UNIQUE,active BOOLEAN NOT NULL DEFAULT true);
@@ -42,6 +43,13 @@ ALTER TABLE comments ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid();
 ALTER TABLE shipping_zones ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid();
 ALTER TABLE shipping_rates ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid();
+
+UPDATE store_settings
+SET data=jsonb_set(data, '{instagram_url}', to_jsonb('https://www.instagram.com/linastyled.you?obrf=NW55b200cDQ5MWs%3D&utm_source=qr'::text))
+WHERE id=1 AND (
+  data->>'instagram_url' IS NULL OR
+  data->>'instagram_url'='https://instagram.com/linachili_linastyledyou'
+);
 
 UPDATE categories SET public_id=gen_random_uuid() WHERE public_id IS NULL;
 UPDATE products SET public_id=gen_random_uuid() WHERE public_id IS NULL;

@@ -14,11 +14,11 @@ Refactor the Express backend into feature modules, using the separation of conce
 
 The backend already has TypeScript foundations: `app.ts`, a root router, shared HTTP/auth/validation/error middleware, database types and query code, and an `auth` module with DTOs, controller, service, and module files.
 
-However, `backend/package.json` still runs `src/server.js` for both `dev` and `start`. That legacy server mounts the JavaScript route files directly. The new `app.ts` and `routes/index.ts` are therefore not yet the active server composition. The legacy server also has behavior that is not yet represented in `app.ts`/the root router, notably the raw-body Paystack webhook and `/api/settings`. Do not switch traffic to the new app or remove the legacy server until these behaviors are accounted for.
+The `dev` and `start` scripts run `src/server.ts` through `tsx`. The active TypeScript composition preserves the raw-body Paystack webhook and exposes feature routers through `app.ts` and `routes/index.ts`. The legacy JavaScript server and route files remain in the repository but are not mounted by this composition; remove them only after the remaining parity checks pass.
 
 ## Existing feature behavior and readiness review
 
-This review compares the current Express routes and the storefront calls in `frontend/src/main.jsx` with the LinaStyledYou purchase, account, and admin flows. These are behavior inventories, not claims that the APIs have automated regression coverage; `backend/package.json` currently has no test script.
+This review compares the current Express routes and the storefront calls in `frontend/src/main.jsx` with the LinaStyledYou purchase, account, and admin flows. The active modules have focused HTTP regression coverage through `npm test --prefix backend`.
 
 ### Catalog — reviewed, wired, and focused tests passing
 
@@ -32,7 +32,7 @@ This review compares the current Express routes and the storefront calls in `fro
 
 **Changes in this review**
 
-- Replaced the active TypeScript app's public catalog mount with the TypeScript catalog module and mounted its catalog-owned admin routes under `/api/admin`. Kept other feature/admin route mounts commented as requested. Admin catalog endpoints now have one owner instead of shadowed duplicate product handlers.
+- Replaced the active TypeScript app's public catalog mount with the TypeScript catalog module and mounted its catalog-owned admin routes under `/api/admin`. Admin catalog endpoints now have one owner instead of shadowed duplicate product handlers. Admin and support feature modules are also mounted; see their sections below.
 - Kept the storefront's `/admin/products` contract, accepting its `image`/`sizes` input while also supporting `images`/`variants`. Product and variant writes are transactional; admin create/update responses include the primary image and active sizes. Product edits from the current form no longer submit an empty sizes list and unintentionally deactivate all existing variants.
 - Restored add-size, update-size, and remove-size behavior at `/api/admin/products/:id/sizes` paths. Variant removal and product/category removal are soft deactivations. Reject duplicate active variant names and map duplicate SKU/category conflicts to `409`; reject assigning products to inactive categories.
 - Adapted list queries to fetch image/variant rows separately, avoiding a correlated-subquery limitation in the `pg-mem` fallback while preserving the response's primary `image` and `sizes` fields.
@@ -95,25 +95,29 @@ Resource IDs exposed by the API are UUID strings; database primary keys and fore
 
 **Changes and checks:** Added payment DTO, controller, service integration, and router. Mounted only customer payment endpoints under `/api/payments`; the raw-body Paystack webhook remains at the app boundary and now uses the TypeScript service. Initialization and manual confirmation accept order UUIDs and verify ownership; public payment references no longer embed internal numeric order IDs. Initialization allows only unpaid pending orders and prevents a second pending payment. Manual confirmation checks the exact order total and prevents duplicate pending confirmations. Online and manual payment attempts are mutually exclusive while either is pending. Verification checks the provider reference, amount, and currency, scopes authenticated verification to the owning user, and applies idempotent paid/failed transitions. Failed verification and pending-order cancellation/stock restoration now share one transaction. Added API tests for initialization, duplicate/overlapping attempts, ownership, paid/idempotent verification, amount mismatch, manual confirmation checks, failed-payment stock restoration, and webhook signature/body handling. Updated Swagger.
 
-**Paystack Inline checkout:** The storefront now loads Paystack Inline v2, requests a unique reference and server-calculated amount/currency from the API, opens the popup, and verifies successful callbacks server-side. Closing/failing checkout cancels the local pending attempt so the shopper can retry; a retry button remains available after an order is created. The browser reads only `PAYSTACK_PUBLIC_KEY`; `PAYSTACK_SECRET_KEY` remains server-side. Added `frontend/.env.example`, and `.env.local` is ignored. A local test-mode public key still needs to be configured and the frontend dev server restarted before exercising the popup.
+**Paystack Inline checkout:** The storefront now loads Paystack Inline v2, requests a unique reference and server-calculated amount/currency from the API, opens the popup, and verifies successful callbacks server-side. Closing/failing checkout cancels the local pending attempt so the shopper can retry; a retry button remains available after an order is created. The browser reads only `VITE_PAYSTACK_PUBLIC_KEY`; `PAYSTACK_SECRET_KEY` remains server-side. Added `frontend/.env.example`, and `.env.local` is ignored. A local test-mode public key still needs to be configured and the frontend dev server restarted before exercising the popup.
 
-**Remaining:** Manual confirmation approval/rejection remains in the legacy admin routes and is not mounted yet; migrate it with the Admin module. The payments API tests mock Paystack responses; no live provider transaction was made.
+**Remaining:** The payments API tests mock Paystack responses; no live provider transaction was made.
 
-### Admin — dashboard and management exist; consistency and validation gaps remain
+### Admin — migrated to the active TypeScript application
 
-**Existing logic:** Dashboard totals/low stock/recent orders; product management; order listing/status updates; customer listing and customer order history; staff listing plus owner-only staff creation/removal; manual-payment review; and settings read/update. Admin/owner authorization is applied to the admin router, with owner-only staff mutations. Public settings are read separately by the storefront.
+**Implemented:** Dashboard totals/low stock/recent orders; order listing and status updates; customer listing and order history; staff listing and owner-only staff creation/removal; manual-payment review; and settings read/update now run through `modules/admin`. Product/category/variant management remains in `modules/catalog`. All admin routes use the shared TypeScript auth middleware; staff mutations remain owner-only. Public settings are served by `modules/support`.
 
-**Gaps:** Product routes overlap the catalog/admin-products routers as described above. Order status changes are not constrained by an explicit transition policy; settings updates replace the stored JSON object rather than merging omitted fields; category management is split into the admin route despite being catalog data. Message inbox has list-only behavior, and staff/account actions need route-level authorization parity checks. Keep admin-owned order, staff, dashboard, and store-setting workflows distinct from catalog-owned product/category/variant workflows.
+**Validation:** HTTP tests cover owner access to dashboard, orders, customers, customer order history, staff, payment confirmations, and settings; owner-only staff creation/removal; denial of staff mutations to admins; order status/tracking updates; and payment-confirmation approval updating the order.
 
-### Support — customer-facing submission exists; moderation is partial
+**Remaining:** Order status changes are not constrained by an explicit transition policy. Settings updates replace the stored JSON object rather than merging omitted fields, preserving existing behavior. Message inbox remains list-only.
 
-**Existing logic:** Public contact-message submission and admin inbox listing; public approved-review and approved-comment reads; authenticated review and question/comment submission. Reviews require a paid purchase, are unique per product/user, and update the product rating.
+### Support — migrated to the active TypeScript application
 
-**Gaps:** Reviews are immediately marked approved despite the schema default and no moderation API; comments are immediately visible by default. There are no admin moderation, message read/archive/reply, or comment-thread management routes. Comment parent IDs exist in the schema but the API does not expose threaded replies. Contact submission is not linked to an authenticated user. Define whether moderation and inbox actions are required for the first release; do not imply those capabilities are already implemented.
+**Implemented:** Public settings, approved-review and approved-comment reads, authenticated review and question/comment submissions, contact-message submission, and admin inbox listing now run through `modules/support`. Reviews require a paid purchase, remain unique per product/user, and recalculate the product rating.
 
-### App and database foundation — blocking prerequisite
+**Validation:** HTTP tests cover public settings, successful and unverified-purchase review submissions, review/rating reads, comment creation and reads, contact-message submission, and admin-only inbox access.
 
-The current JavaScript server is the only active composition. The TypeScript root mounts auth and health only; it lacks public settings, catalog, cart, order, support, admin, payment routes, and raw-body webhook handling. Preserve parser/middleware order, route prefixes, CORS, docs, health, and settings when making TypeScript the active server. Keep SQL migration/seed and the `pg`/`pg-mem` behavior intact.
+**Remaining:** Reviews/comments are immediately visible; moderation, message read/archive/reply, and threaded-comment routes are not implemented. Contact submission remains unauthenticated.
+
+### App and database foundation — active TypeScript composition
+
+The normal server scripts run the TypeScript app. The root router mounts auth, catalog, cart, orders, payments, admin, and support modules. The app preserves CORS, docs, health, raw-body webhook handling, parser order, and the shared PostgreSQL/`pg-mem` query layer. Legacy JavaScript routes remain unmounted pending final parity checks.
 
 ## Target structure
 
@@ -176,17 +180,17 @@ Define and implement safe, idempotent payment/order transitions, order eligibili
 
 **Exit check:** verify online and manual payment flows, amount mismatch, canceled/non-pending orders, duplicate submissions/events, all payment/order state transitions, stock release, and that webhook parsing/signature validation work end to end.
 
-### 5. Admin
+### 5. Admin — implemented and mounted
 
-Move dashboard, order/user/message management, and store settings from `routes/admin.js` and the legacy `/api/settings` handler into admin-focused module routes/services. Keep `owner`/`admin` authorization distinctions and existing settings behavior. Decide whether settings updates merge partial values or replace the full object, and define allowed order status transitions. Catalog product/category/variant management remains owned by the catalog feature.
+Dashboard, order/customer management, staff operations, manual-payment review, and store settings now run through `modules/admin`; catalog product/category/variant management remains in `modules/catalog`. Owner/admin distinctions are enforced with shared middleware. Settings updates continue to replace the stored object to preserve the existing contract.
 
-**Exit check:** verify role restrictions, staff operations, dashboard/order/customer/message/settings responses, status transitions, and partial settings updates against the chosen contract.
+**Remaining exit checks:** Define allowed order status transitions and test against PostgreSQL in addition to the `pg-mem` integration coverage.
 
-### 6. Support
+### 6. Support — implemented and mounted
 
-Decide whether first-release support requires review/comment moderation, threaded questions, and message read/archive/reply actions. Then move contact messages from `routes/support.js` and include the review and product-question/comment endpoints currently used by the storefront. Preserve verified-purchaser rules and keep customer support submission distinct from admin inbox management.
+Public settings, contact messages, product reviews, comments/questions, and admin inbox listing now run through `modules/support`. Verified-purchase review requirements and rating recalculation are covered by HTTP tests.
 
-**Exit check:** verify contact submission, verified reviews, review-rating updates, comment visibility/threading, and each agreed moderation/inbox operation.
+**Remaining:** Decide whether moderation, threaded questions, and message read/archive/reply actions are required for the first release.
 
 ### 7. Remove legacy implementations and finish documentation
 

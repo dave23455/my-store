@@ -8,6 +8,10 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://linastyle-api.onrender.com/api
+      - key: VITE_CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: VITE_CLOUDINARY_UPLOAD_PRESET
+        sync: false
   - type: web
     name: linastyle-api
     runtime: node

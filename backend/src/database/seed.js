@@ -14,7 +14,7 @@ await pool.query('INSERT INTO store_settings(id,data) VALUES(1,$1) ON CONFLICT(i
   contact_email: 'kehindelina@gmail.com',
   phone: '+2348065205096',
   whatsapp_number: '2348065205096',
-  instagram_url: 'https://instagram.com/linachili_linastyledyou',
+  instagram_url: 'https://www.instagram.com/linastyled.you?obrf=NW55b200cDQ5MWs%3D&utm_source=qr',
   tiktok_url: 'https://www.tiktok.com/@linachili',
   whatsapp_message: 'Hello! I would like to make an order.',
   currency: 'NGN',
@@ -83,4 +83,3 @@ for (const product of products) {
 }
 console.log('Seeded demo catalog');
 await pool.end();
-

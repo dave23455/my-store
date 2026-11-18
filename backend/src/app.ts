@@ -9,7 +9,6 @@ import { dirname, join } from "node:path";
 import apiRouter from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.middleware.js";
 import { asyncHandler, limiter } from "./middleware/http.middleware.js";
-import { query } from "./config/db.js";
 import { paymentService } from "./modules/payments/payment.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -91,15 +90,6 @@ export const createApp = (): Express => {
 
   // API Routes
   app.use("/api", apiRouter);
-  app.get(
-    "/api/settings",
-    asyncHandler(async (_req: Request, res: Response) => {
-      const result = await query<{ data: Record<string, unknown> }>(
-        "SELECT data FROM store_settings WHERE id=1"
-      );
-      res.json(result.rowCount ? result.rows[0].data : {});
-    })
-  );
 
   // Global Error Handler
   app.use(errorHandler);

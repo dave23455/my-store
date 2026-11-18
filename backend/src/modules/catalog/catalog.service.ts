@@ -270,6 +270,12 @@ export class CatalogService {
     ]);
     const firstImages = firstImageByProduct(images.rows);
     const variantsById = variantsByProduct(variants.rows);
+    const imagesById = new Map<number, string[]>();
+    for (const image of images.rows) {
+      const productImages = imagesById.get(image.product_id) ?? [];
+      productImages.push(image.url);
+      imagesById.set(image.product_id, productImages);
+    }
     return result.rows.map((product) => {
       const { category_public_id, ...row } = product;
       const sizes = (variantsById.get(product.id) ?? []).map((variant) => ({
@@ -282,6 +288,7 @@ export class CatalogService {
       return publicEntity(row, {
         category_id: category_public_id,
         image: firstImages.get(product.id) ?? "",
+        images: imagesById.get(product.id) ?? [],
         sizes,
       });
     });
@@ -311,6 +318,7 @@ export class CatalogService {
     return {
       ...publicEntity(product, { category_id: category_public_id }),
       image: images.rows[0]?.url ?? "",
+      images: images.rows.map((image) => image.url),
       sizes: variants.rows,
     };
   }
@@ -324,12 +332,13 @@ export class CatalogService {
       if (!category.rowCount) throw ApiError.badRequest("Active category not found.");
 
       const inserted = await client.query(
-        `INSERT INTO products(name,category_id,description,price,discount_price,stock,sku,brand,featured,new_arrival,best_seller)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+        `INSERT INTO products(name,category_id,description,size_guide,price,discount_price,stock,sku,brand,featured,new_arrival,best_seller)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
         [
           value.name,
           category.rows[0].id,
           value.description,
+          value.sizeGuide ?? "",
           value.price,
           value.discountPrice ?? null,
           value.stock,
@@ -365,6 +374,7 @@ export class CatalogService {
       const columns: Record<string, string> = {
         name: "name",
         description: "description",
+        sizeGuide: "size_guide",
         price: "price",
         discountPrice: "discount_price",
         stock: "stock",
